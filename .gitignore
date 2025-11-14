@@ -40,3 +40,7 @@ _templates
 
 # Alpha
 lab/
+
+# 排除其他项目
+vnpy/
+ytc/

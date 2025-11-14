@@ -1,6 +1,7 @@
 """
 Basic data structure for pulao
-"""
+"""  # noqa: SPELLING
+from typing import Dict
 
 from vnpy.trader.object import BarData
 
@@ -66,7 +67,9 @@ class Structure:
     识别走势结构、方向与强度
     """
 
-    ...
+    def update(self, bar:PulaoBar) -> Dict[str, float]:
+        ...
+
 
 
 class KeyZone:
