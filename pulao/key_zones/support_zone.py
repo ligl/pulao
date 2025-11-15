@@ -1,4 +1,5 @@
-from pulao.key_zone import KeyZone, KeyZoneType
+from ..key_zone import KeyZone, KeyZoneType
+from ..tend import Trend
 
 
 class SupportZone(KeyZone):
