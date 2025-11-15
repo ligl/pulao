@@ -5,7 +5,7 @@ from vnpy.trader.constant import \
     Exchange
 from vnpy.trader.object import BarData
 
-from pulao.object import PulaoBar
+from pulao.object import SBar
 
 # 导入bardata扩展
 
@@ -15,7 +15,7 @@ bar.close_price = 105
 bar.high_price = 108
 bar.low_price = 98
 
-pulaoBar = PulaoBar(bar) # noqa: SPELLING
+pulaoBar = SBar(bar) # noqa: SPELLING
 
 # 使用扩展属性
 print("BarData 动态扩展属性：")

@@ -4,7 +4,7 @@ from vnpy.trader.constant import Interval
 from vnpy.trader.object import BarData, TickData
 from vnpy.trader.utility import BarGenerator
 from vnpy_ctastrategy import CtaTemplate
-from pulao.object import PulaoBar, Structure, KeyZone, Signal, Decision
+from pulao.object import SBar, Swing, KeyZone, SupplyDemand, Decision
 
 
 class PulaoStrategy(CtaTemplate):  # noqa: SPELLING
@@ -13,9 +13,9 @@ class PulaoStrategy(CtaTemplate):  # noqa: SPELLING
     def on_init(self) -> None:
         # 初始化蒲牢系统模块
         self.data = None  # 数据处理
-        self.structure = Structure()  # 波段结构
+        self.structure = Swing()  # 波段结构
         self.keyzone = KeyZone()  # 关键位置 # noqa: SPELLING
-        self.signal = Signal()  # 信号分析
+        self.signal = SupplyDemand()  # 信号分析
         self.decision = Decision()  # 决策模块
 
         self.bg_tick = BarGenerator(
@@ -73,7 +73,7 @@ class PulaoStrategy(CtaTemplate):  # noqa: SPELLING
         # if self.trend_state is None:
         #     return
         # self.keyzones = self.keyzone.update(bar, self.trend_state)
-        # self.signal_state = self.signal.update(bar, self.keyzones, self.trend_state)
+        # self.signal_state = self.supply_demand.update(bar, self.keyzones, self.trend_state)
 
     def on_entry_bar(self, bar: BarData):
         print(f"策略 - {self.__class__.__name__} - on_entry_bar: {bar}")

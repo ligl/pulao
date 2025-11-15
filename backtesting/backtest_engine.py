@@ -40,7 +40,7 @@ def load_tick_csv_to_ticks(csv_path: str, vt_symbol: str):
     symbol, exch = vt_symbol.split(".")
     exchange = Exchange[exch] if exch in Exchange.__members__ else Exchange(Exchange._member_map_.get(exch, exch))
 
-    df = df.head(1000) # TODO: 取部分数据用于开发测试流程
+    # df = df.head(1000) # TODO: 取部分数据用于开发测试流程
     ticks = []
     for _, row in df.iterrows():
         t = TickData(
