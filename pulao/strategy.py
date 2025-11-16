@@ -4,7 +4,7 @@ from vnpy.trader.constant import Interval
 from vnpy.trader.object import BarData, TickData
 from vnpy.trader.utility import BarGenerator
 from vnpy_ctastrategy import CtaTemplate
-from pulao.object import SBar, Swing, KeyZone, SupplyDemand, Decision
+from pulao.model import SBar, Swing, KeyZone, SupplyDemand, Decision
 
 
 class PulaoStrategy(CtaTemplate):  # noqa: SPELLING

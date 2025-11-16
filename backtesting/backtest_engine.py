@@ -101,6 +101,6 @@ def run_tick_backtest(csv_path: str, vt_symbol: str):
 if __name__ == "__main__":
     enable_console_log()
     # 示例：把路径改成你的 CSV 文件和合约
-    csv_path = os.path.abspath("dataset/I2601.XDCE_tick.csv")
+    csv_path = os.path.abspath("../dataset/I2601.XDCE_tick.csv")
     vt_symbol = "I2601.DCE"   # 注意大小写与 Exchange 对应
     run_tick_backtest(csv_path, vt_symbol)

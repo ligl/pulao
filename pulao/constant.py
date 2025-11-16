@@ -10,6 +10,12 @@ class SwingPoint(Enum):
     LOW = "low"
     NONE = ""
 
+    def __repr__(self):
+        return self.value
+
+    def __str__(self):
+        return self.value
+
 
 class SwingDirection(Enum):
     """
