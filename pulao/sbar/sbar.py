@@ -7,8 +7,10 @@ from vnpy.trader.object import BarData
 
 class SBar:
     """
-    BarData扩展
+    SuperBar , BarData扩展
     """
+
+    index: int = 0  # 在SBarManager数据源中的索引
 
     symbol: str
     exchange: str
@@ -28,19 +30,20 @@ class SBar:
     ema_20: float = 0
     ema_60: float = 0
 
-    def __init__(self, bar: BarData):
+    def __init__(self, bar: BarData = None):
         super().__init__()
-        self.symbol = bar.symbol
-        self.exchange = bar.exchange.value
-        self.datetime = bar.datetime
-        self.interval = bar.interval.value if bar.interval else ""
-        self.volume = bar.volume
-        self.turnover = bar.turnover
-        self.open_interest = bar.open_interest
-        self.open_price = bar.open_price
-        self.high_price = bar.high_price
-        self.low_price = bar.low_price
-        self.close_price = bar.close_price
+        if bar is not None:
+            self.symbol = bar.symbol
+            self.exchange = bar.exchange.value
+            self.datetime = bar.datetime
+            self.interval = bar.interval.value if bar.interval else ""
+            self.volume = bar.volume
+            self.turnover = bar.turnover
+            self.open_interest = bar.open_interest
+            self.open_price = bar.open_price
+            self.high_price = bar.high_price
+            self.low_price = bar.low_price
+            self.close_price = bar.close_price
 
         self.swing_point = SwingPoint.NONE
 
@@ -52,6 +55,31 @@ class SBar:
 
     def _repr_html_(self):
         self.__repr__()
+
+    def to_dict(self, include_private=False):
+        if include_private:
+            return self.__dict__
+        else:
+            return {k: v for k, v in self.__dict__.items() if not k.startswith("_")}
+
+    def to_schema(self):
+        return {
+            "symbol": self.symbol,
+            "exchange": self.exchange,
+            "interval": self.interval,
+            "datetime": self.datetime,
+            "volume": self.volume,
+            "open_interest": self.open_interest,
+            "open_price": self.open_price,
+            "high_price": self.high_price,
+            "low_price": self.low_price,
+            "close_price": self.close_price,
+            "swing_point": self.swing_point.value
+            if self.swing_point is not None
+            else SwingPoint.NONE.value,
+            "ema_20": self.ema_20,
+            "ema_60": self.ema_60,
+        }
 
     @property
     def body(self) -> float:

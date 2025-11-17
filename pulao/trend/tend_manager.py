@@ -1,6 +1,7 @@
 from typing import List
 from pulao.events import Observable
 from .trend import Trend
+from ..constant import EventType
 
 
 class TrendManager(Observable):
@@ -12,5 +13,5 @@ class TrendManager(Observable):
 
     def add(self, trend: Trend):
         self.trends.append(trend)
-        self.notify("trend.created", trend)
+        self.notify(EventType.TREND_CHANGED, trend)
 

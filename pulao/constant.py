@@ -1,7 +1,23 @@
 from enum import Enum
 
 
-class SwingPoint(Enum):
+class BaseEnum(Enum):
+    def __repr__(self):
+        return self.value
+
+    def __str__(self):
+        return self.value
+
+    @classmethod
+    def parse(cls,value: str):
+        for member in cls:
+            if str(member.value).lower() == value.lower():
+                return member
+
+        raise ValueError(f"{value!r} is not a valid {cls.__name__}")
+
+
+class SwingPoint(BaseEnum):
     """
     波段高低点
     """
@@ -10,14 +26,7 @@ class SwingPoint(Enum):
     LOW = "low"
     NONE = ""
 
-    def __repr__(self):
-        return self.value
-
-    def __str__(self):
-        return self.value
-
-
-class SwingDirection(Enum):
+class SwingDirection(BaseEnum):
     """
     波段方向
     """
@@ -27,7 +36,7 @@ class SwingDirection(Enum):
     NONE = ""
 
 
-class TrendDirection(Enum):
+class TrendDirection(BaseEnum):
     """
     趋势方向
     """
@@ -38,7 +47,7 @@ class TrendDirection(Enum):
     NONE = ""
 
 
-class DecisionAction(Enum):
+class DecisionAction(BaseEnum):
     """
     决策行为：多开(buy)、多平(sell)、空开(short)、空平(cover)、等待(wait)
     """
@@ -50,7 +59,7 @@ class DecisionAction(Enum):
     WAIT = "wait"
 
 
-class KeyZoneType(Enum):
+class KeyZoneType(BaseEnum):
     """
     KeyZone 的类别或功能类型，比如 support、resistance、oscillation 等，决定 KeyZone 在分析和逻辑上的行为
     """
@@ -66,7 +75,7 @@ class KeyZoneType(Enum):
     UNKNOWN = "unknown"  # 未知
 
 
-class KeyZoneOrigin(Enum):
+class KeyZoneOrigin(BaseEnum):
     """
     KeyZone 的来源或生成逻辑，比如 from_trend、from_swing、from_manual，帮助追踪这个区域是通过哪种方式产生的（便于管理、更新或过滤）
 
@@ -83,3 +92,13 @@ class KeyZoneOrigin(Enum):
     VOLUME_NODE = "volume_node"  # 成交量节点（POC / value area）
     CANDLE_ACTION = "candle_action"  # K线行为区（长影线、多次测试）
     UNKNOWN = "unknown"  # 未知
+
+
+class EventType(BaseEnum):
+    """
+    Event事件类型
+    """
+
+    SBAR_CREATED = "sbar.created"
+    SWING_CHANGED = "swing.changed"
+    TREND_CHANGED = "trend.changed"

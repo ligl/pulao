@@ -4,23 +4,19 @@ from vnpy.trader.constant import Interval
 from vnpy.trader.object import BarData, TickData
 from vnpy.trader.utility import BarGenerator
 from vnpy_ctastrategy import CtaTemplate
-from pulao.model import SBar, Swing, KeyZone, SupplyDemand, Decision
+
+from pulao.sbar import SBarManager, SBar
 
 
-class PulaoStrategy(CtaTemplate):  # noqa: SPELLING
-    author = "Pulao"  # noqa: SPELLING
+class PulaoStrategy(CtaTemplate):
+    author = "Pulao"
+    sbar_manager_trend: SBarManager = None
+    sbar_manager_swing : SBarManager = None
+    sbar_manager_entry : SBarManager = None
 
     def on_init(self) -> None:
-        # 初始化蒲牢系统模块
-        self.data = None  # 数据处理
-        self.structure = Swing()  # 波段结构
-        self.keyzone = KeyZone()  # 关键位置 # noqa: SPELLING
-        self.signal = SupplyDemand()  # 信号分析
-        self.decision = Decision()  # 决策模块
-
-        self.bg_tick = BarGenerator(
-            on_bar=self.on_bar
-        )
+        # 聚合K线，生成高周期K线
+        self.bg_tick = BarGenerator(on_bar=self.on_bar)
         self.bg_trend = BarGenerator(
             on_bar=Callable,
             window=1,
@@ -40,6 +36,9 @@ class PulaoStrategy(CtaTemplate):  # noqa: SPELLING
             interval=Interval.MINUTE,
         )  # 5分钟合成
 
+        self.sbar_manager_trend = SBarManager()
+        self.sbar_manager_swing = SBarManager()
+        self.sbar_manager_entry = SBarManager()
         # # 订阅行情
         # self.cta_engine.subscribe(self.vt_symbol, self.cta_engine.main_engine.get_default_gateway_name())
         print(f"策略 - {self.__class__.__name__} - on_init")
@@ -52,7 +51,7 @@ class PulaoStrategy(CtaTemplate):  # noqa: SPELLING
 
     def on_tick(self, tick: TickData) -> None:
         # print(f"策略 - {self.__class__.__name__} - on_tick")
-        #print(f"{tick}")
+        # print(f"{tick}")
         self.bg_tick.update_tick(tick)
 
     def on_bar(self, bar: BarData):
@@ -65,25 +64,17 @@ class PulaoStrategy(CtaTemplate):  # noqa: SPELLING
     def on_trend_bar(self, bar: BarData):
         # 高周期趋势判断
         print(f"策略 - {self.__class__.__name__} - on_trend_bar: {bar}")
-        # self.trend_state = self.structure.update(PulaoBar(bar))
+        self.sbar_manager_trend.append(SBar(bar))
 
     def on_trade_bar(self, bar: BarData):
         # 中周期信号判断
         print(f"策略 - {self.__class__.__name__} - on_trade_bar: {bar}")
-        # if self.trend_state is None:
-        #     return
-        # self.keyzones = self.keyzone.update(bar, self.trend_state)
-        # self.signal_state = self.supply_demand.update(bar, self.keyzones, self.trend_state)
+        self.sbar_manager_swing.append(SBar(bar))
 
     def on_entry_bar(self, bar: BarData):
         print(f"策略 - {self.__class__.__name__} - on_entry_bar: {bar}")
         # 低周期入场决策
-        # if not all([self.trend_state, self.keyzones, self.signal_state]):
-        #     return
-        # decision_result = self.decision.evaluate(
-        #     self.trend_state, self.keyzones, self.signal_state
-        # )
-        # self.execute_decision(decision_result["decision"], bar.close_price)
+        self.sbar_manager_entry.append(SBar(bar))
 
     def execute_decision(self, decision: str, price: float):
         if decision == "open_long":

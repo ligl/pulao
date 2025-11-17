@@ -1,10 +1,20 @@
+from typing import Any
+
+from polars import Datetime
+
 from pulao.events import Observable
 from pulao.indicator import IndicatorManager, EmaIndicator
 from .sbar import SBar
 import polars as pl
 
+from ..constant import EventType
+
 
 class SBarManager(Observable):
+    """
+    管理缓存bar数据，计算指标
+    """
+
     df: pl.DataFrame = None
     indicator_manager: IndicatorManager
 
@@ -38,7 +48,7 @@ class SBarManager(Observable):
         sbar.ema_20 = indicator_dict["ema_20"]
         sbar.ema_60 = indicator_dict["ema_60"]
 
-        row = sbar_to_row(sbar)
+        row = sbar.to_schema()
 
         self.df = self.df.vstack(
             pl.DataFrame(
@@ -47,22 +57,51 @@ class SBarManager(Observable):
                 orient="row",
             )
         )  # append row
-        self.notify("sbar.created", sbar)
+        self.notify(EventType.SBAR_CREATED, sbar)
         return sbar.index
 
-    def get_by_index(self, idx: int):
-        return self.df[idx]
+    def get_at_index(self, index: int) -> SBar:
+        row = self.df.row(index, named=True)
+        sbar = SBar()
+        sbar.index = index
+        sbar.exchange = row["exchange"]
+        sbar.symbol = row["symbol"]
+        sbar.interval = row["interval"]
+        sbar.open_price = row["open_price"]
+        sbar.high_price = row["high_price"]
+        sbar.low_price = row["low_price"]
+        sbar.close_price = row["close_price"]
+        sbar.volume = row["volume"]
+        sbar.open_interest = row["open_interest"]
+        sbar.swing_point = row["swing_point"]
+        sbar.ema_20 = row["ema_20"]
+        sbar.ema_60 = row["ema_60"]
 
-    def get_by_time(self, dt):
-        return self.df.filter(pl.col("datetime") == dt)
+        return sbar
 
-    def get_range(self, start, end):
-        return self.df.filter(
-            (pl.col("datetime") >= start) & (pl.col("datetime") <= end)
-        )
+    def get_at_time(self, dt: Datetime) -> SBar:
+        index = self.df.select(pl.col("datetime").search_sorted(dt)).item()
+        return self.get_at_index(index)
+
+    def get_range_index(self, start: int, end: int):
+        return self.df.slice(start, end - start + 1)
+
+    def get_range_time(self, start: Datetime, end: Datetime):
+        start_idx = self.df.select(pl.col("datetime").search_sorted(start)).item()
+        end_idx = self.df.select(
+            pl.col("datetime").search_sorted(end, side="right")
+        ).item()
+
+        return self.df.slice(start_idx, end_idx - start_idx)
+
+    @property
+    def total_count(self):
+        return self.df.height
+
+    def get_last(self, length: int = 1):
+        return self.df.slice(-length)
 
     def update_by_datetime(self, dt, field, value):
-        """根据 datetime 更新某字段（高性能）"""
         self.df = self.df.with_columns(
             pl.when(pl.col("datetime") == dt)
             .then(pl.lit(value))
@@ -71,21 +110,13 @@ class SBarManager(Observable):
         )
 
     def update_by_index(self, index, field, value):
-        """根据 row index 更新某字段（高性能）"""
         self.df = self.df.with_columns(
             pl.when(pl.arange(0, self.df.height) == index)
             .then(pl.lit(value))
             .otherwise(pl.col(field))
             .alias(field)
         )
-
-    def recalc_recent_swing_flags(self, lookback: int = 7):
-        # 根据最近 lookback 根bar重新计算波段高低点
-        # 修改SBar的 is_swing_high / is_swing_low 并触发事件
-        pass
-
-
-def sbar_to_row(bar: SBar) -> dict:
+def _sbar_to_row(bar: SBar) -> dict:
     return {
         "symbol": bar.symbol,
         "exchange": str(bar.exchange),
@@ -101,3 +132,5 @@ def sbar_to_row(bar: SBar) -> dict:
         "ema_20": float(bar.ema_20),
         "ema_60": float(bar.ema_60),
     }
+
+

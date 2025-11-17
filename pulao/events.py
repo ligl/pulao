@@ -1,10 +1,11 @@
 from typing import Callable, Any, List
 
-Subscriber = Callable[[str, Any], None]
+from pulao.constant import EventType
+
+Subscriber = Callable[[EventType, Any], None]
 
 
 class Observable:
-
     _subscribers: List[Subscriber]
 
     def __init__(self) -> None:
@@ -18,7 +19,7 @@ class Observable:
         if fn in self._subscribers:
             self._subscribers.remove(fn)
 
-    def notify(self, event_type: str, payload: Any = None) -> None:
+    def notify(self, event_type: EventType, payload: Any = None) -> None:
         for fn in list(self._subscribers):
             try:
                 fn(event_type, payload)
