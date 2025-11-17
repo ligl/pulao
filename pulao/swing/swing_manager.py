@@ -23,9 +23,8 @@ class SwingManager(Observable):
     def __init__(self, sbar_manager: SBarManager):
         super().__init__()
         schema = {
-            "datetime": pl.Datetime,
-            "symbol": pl.Utf8,
-            "interval": pl.Utf8,
+            "start_index": int,
+            "end_index": int,
             "high_price": pl.Float32,
             "low_price": pl.Float32,
             "swing_point": pl.Utf8,  # 波段高低点标记
@@ -52,91 +51,103 @@ class SwingManager(Observable):
     def _agg_bar(self, sbar: SBar):
         # 对传入sbar做K线包含处理
         index = self.df.height - 1
-        while True:
-            cbar_df = self.df.slice(index, 2)
-            # 包含合并处理逻辑
-            # cbar_df中：
-            # 第1行：合并时定方向用的bar
-            # 第2行：与sbar做比较，判断是否需要合并
-            high_price = 0
-            low_price = 0
-            if cbar_df.height == 2:  # 已有构造数据列表
-                row_direction = cbar_df.row(0, named=True)
-                row_compare = cbar_df.row(1, named=True)
+        cbar_df = self.df.slice(index, 2)
+        # 包含合并处理逻辑
+        # cbar_df中：
+        # 第1行：合并时定方向用的bar
+        # 第2行：与sbar做比较，判断是否需要合并
+        high_price = 0
+        low_price = 0
+        start_index = 0
+        end_index = 0
+        if cbar_df.height == 2:  # 已有构造数据列表
+            row_direction = cbar_df.row(0, named=True)
+            row_compare = cbar_df.row(1, named=True)
 
-                if row_compare["high_price"] > row_direction["high_price"]:  # 向上
-                    direction = SwingDirection.UP
+            if row_compare["high_price"] > row_direction["high_price"]:  # 向上
+                direction = SwingDirection.UP
 
-                elif row_compare["low_price"] < row_direction["low_price"]:  # 向下
-                    direction = SwingDirection.DOWN
-                else:
-                    # 不应该执行此处代码，如果执行，说明之前的数据有问题！！！
-                    direction = SwingDirection.NONE
+            elif row_compare["low_price"] < row_direction["low_price"]:  # 向下
+                direction = SwingDirection.DOWN
+            else:
+                # 不应该执行此处代码，如果执行，说明之前的数据有问题！！！
+                direction = SwingDirection.NONE
 
-                if (
-                    row_compare["high_price"] > sbar.high_price
-                    and row_compare["low_price"] < sbar.low_price
-                ):  # 内包，即row_compare包含sbar
-                    if direction == SwingDirection.UP:
-                        # 方向向上，取高中高、低中高
-                        high_price = row_compare["high_price"]
-                        low_price = sbar.low_price
-                    else:
-                        # 方向向下，取高中低、低中低
-                        high_price = sbar.high_price
-                        low_price = row_compare["low_price"]
-                elif (
-                    row_compare["high_price"] < sbar.high_price
-                    and row_compare["low_price"] > sbar.low_price
-                ):  # 外包，即sbar包含row_compare
-                    if direction == SwingDirection.UP:
-                        # 方向向上，取高中高、低中高
-                        high_price = sbar.high_price
-                        low_price = row_compare["low_price"]
-                    else:
-                        # 方向向下，取高中低、低中低
-                        high_price = row_compare["high_price"]
-                        low_price = sbar.low_price
-
-            elif cbar_df.height == 1:  # sbar为第2根
-                # 丢弃被包含的bar
-                row_compare = cbar_df.row(0, named=True)
-                if (
-                    row_compare["high_price"] > sbar.high_price
-                    and row_compare["low_price"] < sbar.low_price
-                ):  # 内包，即row_compare包含sbar
+            if (
+                row_compare["high_price"] > sbar.high_price
+                and row_compare["low_price"] < sbar.low_price
+            ):  # 内包，即row_compare包含sbar
+                start_index = row_compare["start_index"]
+                end_index = sbar.index
+                if direction == SwingDirection.UP:
+                    # 方向向上，取高中高、低中高
                     high_price = row_compare["high_price"]
-                    low_price = row_compare["low_price"]
-                elif (
-                    row_compare["high_price"] < sbar.high_price
-                    and row_compare["low_price"] > sbar.low_price
-                ):  # 外包，即sbar包含row_compare
-                    high_price = sbar.high_price
                     low_price = sbar.low_price
-            else:  # 尚未构造数据，sbar为第1根
-                # 直接使用sbar
-                pass
+                else:
+                    # 方向向下，取高中低、低中低
+                    high_price = sbar.high_price
+                    low_price = row_compare["low_price"]
+            elif (
+                row_compare["high_price"] < sbar.high_price
+                and row_compare["low_price"] > sbar.low_price
+            ):  # 外包，即sbar包含row_compare
+                start_index = row_compare["start_index"]
+                end_index = sbar.index
+                if direction == SwingDirection.UP:
+                    # 方向向上，取高中高、低中高
+                    high_price = sbar.high_price
+                    low_price = row_compare["low_price"]
+                else:
+                    # 方向向下，取高中低、低中低
+                    high_price = row_compare["high_price"]
+                    low_price = sbar.low_price
 
-            if not (high_price == 0 and low_price == 0):  # 有包含关系，
-                # 1. 把row_compare删除
-                self.df = self.df.filter(pl.arange(0, self.df.height) != index)
-                # 2. 调整sbar属性
-                sbar.high_price = high_price
-                sbar.low_price = low_price
-            # 3. 增加sbar
-            sbar.swing_point = SwingPoint.NONE
-            row = sbar.to_schema()
-            self.df = self.df.vstack(
-                pl.DataFrame(
-                    [[row[col] for col in self.df.columns]],
-                    schema=self.df.schema,
-                    orient="row",
-                )
-            )  # append row
+        elif cbar_df.height == 1:  # sbar为第2根
+            # 丢弃被包含的bar
+            row_compare = cbar_df.row(0, named=True)
+            if (
+                row_compare["high_price"] > sbar.high_price
+                and row_compare["low_price"] < sbar.low_price
+            ):  # 内包，即row_compare包含sbar
+                high_price = row_compare["high_price"]
+                low_price = row_compare["low_price"]
+                start_index = row_compare["start_index"]
+                end_index = sbar.index
+            elif (
+                row_compare["high_price"] < sbar.high_price
+                and row_compare["low_price"] > sbar.low_price
+            ):  # 外包，即sbar包含row_compare
+                high_price = sbar.high_price
+                low_price = sbar.low_price
+                start_index = row_compare["start_index"]
+                end_index = sbar.index
+        else:  # 尚未构造数据，sbar为第1根
+            # 直接使用sbar
 
-            index = index - 1
-            if index < 0:
-                break
+            pass
+        if high_price == 0 and low_price == 0: # 没有包含关系
+            high_price = sbar.high_price
+            low_price = sbar.low_price
+            start_index = sbar.index
+            end_index = sbar.index
+        else:  # 有包含关系，
+            # 1. 把row_compare删除
+            self.df = self.df.filter(pl.arange(0, self.df.height) != index)
+        # 2. 增加sbar
+        row = {
+            "start_index": start_index,
+            "end_index": end_index,
+            "high_price": high_price,
+            "low_price": low_price,
+            "swing_point":""
+        }
+        self.df = self.df.vstack(
+            pl.DataFrame(
+                [[row[col] for col in self.df.columns]],
+                schema=self.df.schema,
+                orient="row",
+            )
+        )  # append row
 
     def _detect_swing_point(self, sbar: SBar = None):
         # 波段点识别
