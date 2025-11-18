@@ -1,7 +1,6 @@
 from typing import Any, Iterable
 
 from polars import Datetime
-from polars._typing import IntoExpr
 
 from pulao.events import Observable
 from pulao.indicator import IndicatorManager, EmaIndicator
@@ -22,6 +21,7 @@ class SBarManager(Observable):
     def __init__(self):
         super().__init__()
         schema = {
+            "index": pl.UInt32,
             "datetime": pl.Datetime,
             "symbol": pl.Utf8,
             "exchange": pl.Utf8,
@@ -33,7 +33,7 @@ class SBarManager(Observable):
             "volume": pl.Float32,  # 部分品种成交量是浮点
             "open_interest": pl.Float32,
             "swing_point_type": pl.Utf8,  # 波段高低点标记
-            "swing_point_level": pl.Int32,  # 波段高低点级别
+            "swing_point_level": pl.Int8,  # 波段高低点级别
             "ema_20": pl.Float32,
             "ema_60": pl.Float32,
         }
@@ -65,7 +65,7 @@ class SBarManager(Observable):
     def get_at_index(self, index: int) -> SBar:
         row = self.df.row(index, named=True)
         sbar = SBar()
-        sbar.index = index
+        sbar.index = row["index"]
         sbar.exchange = row["exchange"]
         sbar.symbol = row["symbol"]
         sbar.interval = row["interval"]
@@ -86,11 +86,8 @@ class SBarManager(Observable):
         index = self.df.select(pl.col("datetime").search_sorted(dt)).item()
         return self.get_at_index(index)
 
-    def get_range_index(self, start: int, end: int, row_index: bool = False):
-        df = self.df
-        if row_index:
-            df = df.with_row_index("__index__")
-        return df.slice(start, end - start + 1)
+    def get_range_index(self, start: int, end: int):
+        return self.df.slice(start, end - start + 1)
 
     def get_range_time(self, start: Datetime, end: Datetime):
         start_idx = self.df.select(pl.col("datetime").search_sorted(start)).item()
@@ -120,7 +117,7 @@ class SBarManager(Observable):
     def update_by_index(self, index: int, field: str, value):
         self.df = self.df.with_columns(
             [
-                pl.when(pl.arange(0, self.df.height) == index)
+                pl.when(pl.col("index") == index)
                 .then(pl.lit(value))
                 .otherwise(pl.col(field))
                 .alias(field)
@@ -130,9 +127,12 @@ class SBarManager(Observable):
     def update(self, with_columns):
         self.df = self.df.with_columns(with_columns)
 
+    def get_dataframe(self):
+        return self.df
 
 def _sbar_to_row(bar: SBar) -> dict:
     return {
+        "index": bar.index,
         "symbol": bar.symbol,
         "exchange": bar.exchange,
         "interval": bar.interval,

@@ -10,7 +10,7 @@ class SBar:
     SuperBar , BarData扩展
     """
 
-    index: int = 0  # 在SBarManager数据源中的索引
+    index: int = 0  # 在SBarManager数据源中的索引，类似数据库中的自增id
 
     symbol: str
     exchange: str
@@ -71,6 +71,7 @@ class SBar:
 
     def to_schema(self):
         return {
+            "index": self.index,
             "symbol": self.symbol,
             "exchange": self.exchange,
             "interval": self.interval,
