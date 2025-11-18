@@ -1,6 +1,7 @@
-from typing import Any
+from typing import Any, Iterable
 
 from polars import Datetime
+from polars._typing import IntoExpr
 
 from pulao.events import Observable
 from pulao.indicator import IndicatorManager, EmaIndicator
@@ -85,8 +86,11 @@ class SBarManager(Observable):
         index = self.df.select(pl.col("datetime").search_sorted(dt)).item()
         return self.get_at_index(index)
 
-    def get_range_index(self, start: int, end: int):
-        return self.df.slice(start, end - start + 1)
+    def get_range_index(self, start: int, end: int, row_index: bool = False):
+        df = self.df
+        if row_index:
+            df = df.with_row_index("__index__")
+        return df.slice(start, end - start + 1)
 
     def get_range_time(self, start: Datetime, end: Datetime):
         start_idx = self.df.select(pl.col("datetime").search_sorted(start)).item()
@@ -103,21 +107,30 @@ class SBarManager(Observable):
     def get_last(self, length: int = 1):
         return self.df.slice(-length)
 
-    def update_by_datetime(self, dt, field, value):
+    def update_by_datetime(self, dt: Datetime, field: str, value):
         self.df = self.df.with_columns(
-            pl.when(pl.col("datetime") == dt)
-            .then(pl.lit(value))
-            .otherwise(pl.col(field))
-            .alias(field)
+            [
+                pl.when(pl.col("datetime") == dt)
+                .then(pl.lit(value))
+                .otherwise(pl.col(field))
+                .alias(field)
+            ]
         )
 
-    def update_by_index(self, index, field, value):
+    def update_by_index(self, index: int, field: str, value):
         self.df = self.df.with_columns(
-            pl.when(pl.arange(0, self.df.height) == index)
-            .then(pl.lit(value))
-            .otherwise(pl.col(field))
-            .alias(field)
+            [
+                pl.when(pl.arange(0, self.df.height) == index)
+                .then(pl.lit(value))
+                .otherwise(pl.col(field))
+                .alias(field)
+            ]
         )
+
+    def update(self, with_columns):
+        self.df = self.df.with_columns(with_columns)
+
+
 def _sbar_to_row(bar: SBar) -> dict:
     return {
         "symbol": bar.symbol,
@@ -135,5 +148,3 @@ def _sbar_to_row(bar: SBar) -> dict:
         "ema_20": bar.ema_20,
         "ema_60": bar.ema_60,
     }
-
-
