@@ -31,7 +31,8 @@ class SBarManager(Observable):
             "close_price": pl.Float32,
             "volume": pl.Float32,  # 部分品种成交量是浮点
             "open_interest": pl.Float32,
-            "swing_point": pl.Utf8,  # 波段高低点标记
+            "swing_point_type": pl.Utf8,  # 波段高低点标记
+            "swing_point_level": pl.Int32,  # 波段高低点级别
             "ema_20": pl.Float32,
             "ema_60": pl.Float32,
         }
@@ -73,7 +74,8 @@ class SBarManager(Observable):
         sbar.close_price = row["close_price"]
         sbar.volume = row["volume"]
         sbar.open_interest = row["open_interest"]
-        sbar.swing_point = row["swing_point"]
+        sbar.swing_point_type = row["swing_point_type"]
+        sbar.swing_point_level = row["swing_point_level"]
         sbar.ema_20 = row["ema_20"]
         sbar.ema_60 = row["ema_60"]
 
@@ -119,8 +121,8 @@ class SBarManager(Observable):
 def _sbar_to_row(bar: SBar) -> dict:
     return {
         "symbol": bar.symbol,
-        "exchange": str(bar.exchange),
-        "interval": str(bar.interval),
+        "exchange": bar.exchange,
+        "interval": bar.interval,
         "datetime": bar.datetime,
         "volume": bar.volume,
         "open_interest": bar.open_interest,
@@ -128,9 +130,10 @@ def _sbar_to_row(bar: SBar) -> dict:
         "high_price": bar.high_price,
         "low_price": bar.low_price,
         "close_price": bar.close_price,
-        "swing_point": str(bar.swing_point),
-        "ema_20": float(bar.ema_20),
-        "ema_60": float(bar.ema_60),
+        "swing_point_type": bar.swing_point_type.value,
+        "swing_point_level": bar.swing_point_type.value,
+        "ema_20": bar.ema_20,
+        "ema_60": bar.ema_60,
     }
 
 

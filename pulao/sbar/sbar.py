@@ -1,4 +1,4 @@
-from pulao.constant import SwingPoint
+from pulao.constant import SwingPointType, SwingPointLevel
 
 from datetime import datetime as Datetime
 
@@ -25,7 +25,8 @@ class SBar:
     low_price: float = 0
     close_price: float = 0
 
-    swing_point: SwingPoint = SwingPoint.NONE
+    swing_point_type: SwingPointType = SwingPointType.NONE
+    swing_point_level: SwingPointLevel = SwingPointLevel.NONE
 
     ema_20: float = 0
     ema_60: float = 0
@@ -46,7 +47,8 @@ class SBar:
             self.low_price = bar.low_price
             self.close_price = bar.close_price
 
-        self.swing_point = SwingPoint.NONE
+        self.swing_point_type = SwingPointType.NONE
+        self.swing_point_level = SwingPointLevel.NONE
 
         self.ema_20 = 0
         self.ema_60 = 0
@@ -79,9 +81,12 @@ class SBar:
             "high_price": self.high_price,
             "low_price": self.low_price,
             "close_price": self.close_price,
-            "swing_point": self.swing_point.value
-            if self.swing_point is not None
-            else SwingPoint.NONE.value,
+            "swing_point_type": self.swing_point_type.value
+            if self.swing_point_type is not None
+            else SwingPointType.NONE.value,
+            "swing_point_level": self.swing_point_level.value
+            if self.swing_point_level is not None
+            else SwingPointLevel.NONE.value,
             "ema_20": self.ema_20,
             "ema_60": self.ema_60,
         }
@@ -132,11 +137,11 @@ class SBar:
 
     @property
     def is_swing_high(self) -> bool:
-        return self.swing_point == SwingPoint.HIGH
+        return self.swing_point_type == SwingPointType.HIGH
 
     @property
     def is_swing_low(self) -> bool:
-        return self.swing_point == SwingPoint.LOW
+        return self.swing_point_type == SwingPointType.LOW
 
-    def update_swing_point(self, sp: SwingPoint) -> None:
-        self.swing_point = sp
+    def update_swing_point(self, sp: SwingPointType) -> None:
+        self.swing_point_type = sp

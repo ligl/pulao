@@ -4,7 +4,7 @@ from pulao.events import Observable
 import polars as pl
 
 from .swing import Swing
-from ..constant import EventType, SwingDirection, SwingPoint, SwingPointLevel
+from ..constant import EventType, SwingDirection, SwingPointType, SwingPointLevel
 from ..sbar import SBarManager, SBar
 
 
@@ -13,7 +13,7 @@ class _CBar:
     end_index: int  # 合并k线的结束索引
     high_price: float  # 合并后的最高价
     low_price: float  # 合并后的最低价
-    swing_point: SwingPoint  # 波段高低点标识
+    swing_point: SwingPointType  # 波段高低点标识
     swing_point_level: SwingPointLevel  # 波段高低点级别
 
 
@@ -29,7 +29,7 @@ class SwingManager(Observable):
             "end_index": int,
             "high_price": pl.Float32,
             "low_price": pl.Float32,
-            "swing_point": pl.Utf8,  # 波段高低点标记
+            "swing_point_type": pl.Utf8,  # 波段高低点标记
             "swing_point_level": int,  # 波段高低点级别
         }
         self.df_cbar = pl.DataFrame(schema=schema)
@@ -149,7 +149,7 @@ class SwingManager(Observable):
             "end_index": end_index,
             "high_price": high_price,
             "low_price": low_price,
-            "swing_point": "",
+            "swing_point_type": "",
             "swing_point_level": 0,
         }
         self.df_cbar = self.df_cbar.vstack(
@@ -186,7 +186,7 @@ class SwingManager(Observable):
 
         # region 分形判断
         # 取最近的3条bar，判断是否为分形
-        last_bar_df = self.df_cbar.tail(3)
+        last_bar_df = self.df_cbar.with_row_index("__index__").tail(3)
         if last_bar_df.height != 3:  # k线数量不够，不符合分形判断条数要求
             return
 
@@ -221,8 +221,8 @@ class SwingManager(Observable):
             tmp_df = self.df_cbar.with_row_index("__index__").slice(start_index,
                                                                     self.df_cbar.height - 3)
 
-            prev_di_tmp = tmp_df.filter(pl.col("swing_point") == SwingPoint.LOW.value).tail(1)
-            prev_ding_tmp = tmp_df.filter(pl.col("swing_point") == SwingPoint.HIGH.value).tail(1)
+            prev_di_tmp = tmp_df.filter(pl.col("swing_point_type") == SwingPointType.LOW.value).tail(1)
+            prev_ding_tmp = tmp_df.filter(pl.col("swing_point_type") == SwingPointType.HIGH.value).tail(1)
 
             prev_di_index = prev_di_tmp.row(0, named=True)[
                 "__index__"] if not prev_di_tmp.is_empty() else 0
@@ -251,11 +251,11 @@ class SwingManager(Observable):
             prev_ding_high_price, prev_ding_low_price = _get_fractal_range(prev_ding_left,
                                                                            prev_ding_middle,
                                                                            prev_ding_right)
-            swing_point = SwingPoint.NONE
+            swing_point_type = SwingPointType.NONE
             swing_point_level = SwingPointLevel.CURRENT_TIMEFRAME # 默认分形为本级别
 
             if is_fractal_high: # 顶分形
-                swing_point = SwingPoint.HIGH
+                swing_point_type = SwingPointType.HIGH
 
                 # 当前分形是否与前一个反向分形有重叠
                 if _is_price_range_overlap(prev_di_high_price,prev_di_low_price, fractal_high_price, fractal_low_price):
@@ -267,9 +267,8 @@ class SwingManager(Observable):
                         # 有重叠，更新临近的同向分形为次级别
                         prev_ding_level = SwingPointLevel.LOWER_TIMEFRAME
                         # TODO 更新数据源
-                # TODO 更新cbar_df数据源、更新SBarManager
             if is_fractal_low: # 底分形
-                swing_point = SwingPoint.LOW
+                swing_point_type = SwingPointType.LOW
 
                 # 当前分形是否与前一个反向分形有重叠
                 if _is_price_range_overlap(prev_ding_high_price, prev_ding_low_price, fractal_high_price,
@@ -283,7 +282,23 @@ class SwingManager(Observable):
                         # 有重叠，更新临近的同向分形为次级别
                         prev_di_level = SwingPointLevel.LOWER_TIMEFRAME
                         # TODO 更新数据源
-                # TODO 更新cbar_df数据源、更新SBarManager
+
+            # 是分形，更新分形标识和分形级别，更新cbar_df数据源、更新SBarManager
+            self.df_cbar = self.df_cbar.with_columns([
+                pl.when(pl.arange(0, self.df_cbar.height) == middle_bar["__index__"])
+                .then(pl.lit(swing_point_type))
+                .otherwise(pl.col("swing_point_type"))
+                .alias("swing_point_type"),
+                pl.when(pl.arange(0, self.df_cbar.height) == middle_bar["__index__"])
+                .then(pl.lit(swing_point_level.value))
+                .otherwise(pl.col("swing_point_level"))
+                .alias("swing_point_level"),
+            ])
+            # 更新SBarManager数据源
+            # 通过cbar中记录的属性，找到[start_index,end_index]最高/最低的那个值所在的k线，作为分形的middle kbar
+
+        else: # 不是分形
+            pass
     def _mark_swing_point(self, sbar: SBar):
         # 给SBar标注
         pass

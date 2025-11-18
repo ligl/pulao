@@ -17,7 +17,7 @@ class BaseEnum(Enum):
         raise ValueError(f"{value!r} is not a valid {cls.__name__}")
 
 
-class SwingPoint(BaseEnum):
+class SwingPointType(BaseEnum):
     """
     波段高低点
     """
