@@ -26,6 +26,15 @@ class SwingPoint(BaseEnum):
     LOW = "low"
     NONE = ""
 
+class SwingPointLevel(BaseEnum):
+    """
+    波段高低点级别
+    """
+    HIGHER_TIMEFRAME = 3
+    CURRENT_TIMEFRAME = 2
+    LOWER_TIMEFRAME = 1
+    NONE = 0
+
 class SwingDirection(BaseEnum):
     """
     波段方向

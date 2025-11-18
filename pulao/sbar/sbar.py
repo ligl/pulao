@@ -30,8 +30,9 @@ class SBar:
     ema_20: float = 0
     ema_60: float = 0
 
-    def __init__(self, bar: BarData = None):
+    def __init__(self, bar: BarData = None, **kwargs):
         super().__init__()
+        # 如果传入的是 BarData 对象 → 自动解析
         if bar is not None:
             self.symbol = bar.symbol
             self.exchange = bar.exchange.value
@@ -49,6 +50,10 @@ class SBar:
 
         self.ema_20 = 0
         self.ema_60 = 0
+
+        # 然后解析 **kwargs（覆盖 BarData 的同名字段）
+        for k, v in kwargs.items():
+            setattr(self, k, v)
 
     def __repr__(self):
         return f"SBar({self.__dict__})"
