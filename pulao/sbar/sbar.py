@@ -28,8 +28,8 @@ class SBar:
     swing_point_type: SwingPointType = SwingPointType.NONE
     swing_point_level: SwingPointLevel = SwingPointLevel.NONE
 
-    ema_20: float = 0
-    ema_60: float = 0
+    ema_short: float = 0
+    ema_long: float = 0
 
     def __init__(self, bar: BarData = None, **kwargs):
         super().__init__()
@@ -50,8 +50,8 @@ class SBar:
         self.swing_point_type = SwingPointType.NONE
         self.swing_point_level = SwingPointLevel.NONE
 
-        self.ema_20 = 0
-        self.ema_60 = 0
+        self.ema_short = 0
+        self.ema_long = 0
 
         # 然后解析 **kwargs（覆盖 BarData 的同名字段）
         for k, v in kwargs.items():
@@ -88,8 +88,8 @@ class SBar:
             "swing_point_level": self.swing_point_level.value
             if self.swing_point_level is not None
             else SwingPointLevel.NONE.value,
-            "ema_20": self.ema_20,
-            "ema_60": self.ema_60,
+            "ema_short": self.ema_short,
+            "ema_long": self.ema_long,
         }
 
     @property
@@ -120,8 +120,6 @@ class SBar:
     @property
     def shadow_ratio(self) -> float:
         """影线总长度占波幅比例"""
-        if self.total_range == 0:
-            return 0
         return (self.upper_shadow + self.lower_shadow) / self.total_range
 
     @property

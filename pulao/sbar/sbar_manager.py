@@ -34,8 +34,8 @@ class SBarManager(Observable):
             "open_interest": pl.Float32,
             "swing_point_type": pl.Utf8,  # 波段高低点标记
             "swing_point_level": pl.Int8,  # 波段高低点级别
-            "ema_20": pl.Float32,
-            "ema_60": pl.Float32,
+            "ema_short": pl.Float32,
+            "ema_long": pl.Float32,
         }
         self.df = pl.DataFrame(schema=schema)
 
@@ -47,8 +47,8 @@ class SBarManager(Observable):
         sbar.index = self.df.height
         # 计算ema20、ema60指标
         indicator_dict = self.indicator_manager.update(sbar)
-        sbar.ema_20 = indicator_dict["ema_20"]
-        sbar.ema_60 = indicator_dict["ema_60"]
+        sbar.ema_short = indicator_dict["ema_20"]
+        sbar.ema_long = indicator_dict["ema_60"]
 
         row = sbar.to_schema()
 
@@ -77,8 +77,8 @@ class SBarManager(Observable):
         sbar.open_interest = row["open_interest"]
         sbar.swing_point_type = row["swing_point_type"]
         sbar.swing_point_level = row["swing_point_level"]
-        sbar.ema_20 = row["ema_20"]
-        sbar.ema_60 = row["ema_60"]
+        sbar.ema_short = row["ema_short"]
+        sbar.ema_long = row["ema_long"]
 
         return sbar
 
@@ -145,6 +145,6 @@ def _sbar_to_row(bar: SBar) -> dict:
         "close_price": bar.close_price,
         "swing_point_type": bar.swing_point_type.value,
         "swing_point_level": bar.swing_point_type.value,
-        "ema_20": bar.ema_20,
-        "ema_60": bar.ema_60,
+        "ema_short": bar.ema_short,
+        "ema_long": bar.ema_long,
     }
