@@ -1,5 +1,6 @@
 from enum import Enum
 
+LOOKBACK_LIMIT : int = 300 # 检查前一个波段/趋势时，向前回溯的K线数量，越过这个数量就不再关注
 
 class BaseEnum(Enum):
     def __repr__(self):

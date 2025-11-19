@@ -9,7 +9,6 @@ import polars as pl
 
 from ..constant import EventType
 
-
 class SBarManager(Observable):
     """
     管理缓存bar数据，计算指标
@@ -95,7 +94,7 @@ class SBarManager(Observable):
             pl.col("datetime").search_sorted(end, side="right")
         ).item()
 
-        return self.df.slice(start_idx, end_idx - start_idx)
+        return self.df.slice(start_idx, end_idx - start_idx + 1)
 
     @property
     def total_count(self):

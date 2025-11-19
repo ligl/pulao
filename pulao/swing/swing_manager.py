@@ -7,9 +7,8 @@ import polars as pl
 
 from pulao.swing import Swing
 from .swing import Swing
-from ..constant import EventType, SwingDirection, SwingPointType, SwingPointLevel
+from ..constant import EventType, SwingDirection, SwingPointType, SwingPointLevel, LOOKBACK_LIMIT
 from ..sbar import SBarManager, SBar
-
 
 class SwingManager(Observable):
     sbar_manager: SBarManager()
@@ -42,8 +41,6 @@ class SwingManager(Observable):
         self._agg_bar(sbar)
         # 2. 波段点识别
         self._detect_swing_point()
-
-        # self.notify(EventType.SWING_CHANGED, self)
 
     def _agg_bar(self, sbar: SBar):
         #
@@ -206,8 +203,8 @@ class SwingManager(Observable):
         if is_bottom_fractal or is_top_fractal:  # 是分形
             # region 找临近的底分形
             tmp_df = self.df_cbar.slice(
-                0
-            )  # 数据量大的时候可以考虑做优化，比如只找最近的100条
+                 self.df_cbar.height - LOOKBACK_LIMIT if self.df_cbar.height - LOOKBACK_LIMIT > 0 else 0
+            )
 
             prev_bottom_tmp = tmp_df.filter(
                 pl.col("swing_point_type") == SwingPointType.LOW.value
@@ -415,6 +412,7 @@ class SwingManager(Observable):
                 ]
             )
             # endregion
+            self.notify(EventType.SWING_CHANGED)
         else:  # 不是分形
             pass
 
@@ -436,8 +434,10 @@ class SwingManager(Observable):
             prev_opposite_swing_point_type = SwingPointType.HIGH
         else:
             prev_opposite_swing_point_type = SwingPointType.LOW
+
+        slice_index = current_swing.index - LOOKBACK_LIMIT if current_swing.index > LOOKBACK_LIMIT else 0
         prev_opposite_swing_start_index = (
-            self.df_cbar.slice(0, current_swing.index + 1)
+            self.df_cbar.slice( slice_index , current_swing.index - slice_index + 1)
             .filter(
                 (pl.col("swing_point_type") == prev_opposite_swing_point_type)
                 & (pl.col("swing_point_level") == SwingPointLevel.CURRENT_TIMEFRAME)
@@ -472,8 +472,9 @@ class SwingManager(Observable):
         else:
             prev_same_swing_point_type = SwingPointType.LOW
 
+        slice_index = prev_same_swing_end_index - LOOKBACK_LIMIT if prev_same_swing_end_index > LOOKBACK_LIMIT else 0
         prev_same_swing_start_index = (
-            self.df_cbar.slice(0, prev_same_swing_end_index + 1)
+            self.df_cbar.slice(slice_index, prev_same_swing_end_index - slice_index + 1)
             .filter(
                 (pl.col("swing_point_type") == prev_same_swing_point_type)
                 & (pl.col("swing_point_level") == SwingPointLevel.CURRENT_TIMEFRAME)
