@@ -4,8 +4,10 @@ from datetime import datetime as Datetime
 
 from vnpy.trader.object import BarData
 
+from pulao.object import Base
 
-class SBar:
+
+class SBar(Base):
     """
     SuperBar , BarData扩展
     """
@@ -56,18 +58,6 @@ class SBar:
         # 然后解析 **kwargs（覆盖 BarData 的同名字段）
         for k, v in kwargs.items():
             setattr(self, k, v)
-
-    def __repr__(self):
-        return f"SBar({self.__dict__})"
-
-    def _repr_html_(self):
-        self.__repr__()
-
-    def to_dict(self, include_private=False):
-        if include_private:
-            return self.__dict__
-        else:
-            return {k: v for k, v in self.__dict__.items() if not k.startswith("_")}
 
     def to_schema(self):
         return {

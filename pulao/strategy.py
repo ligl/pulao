@@ -5,10 +5,11 @@ from vnpy.trader.object import BarData, TickData
 from vnpy.trader.utility import BarGenerator
 from vnpy_ctastrategy import CtaTemplate
 
+from pulao.object import Base
 from pulao.sbar import SBarManager, SBar
 
 
-class PulaoStrategy(CtaTemplate):
+class PulaoStrategy(Base,CtaTemplate):
     author = "Pulao"
     sbar_manager_trend: SBarManager = None
     sbar_manager_swing : SBarManager = None

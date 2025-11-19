@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from typing import Any, List
 
+from pulao.object import Base
 from pulao.sbar import SBar
 
 
@@ -10,7 +11,7 @@ from pulao.sbar import SBar
 # Indicator base classes
 # -----------------------------
 
-class BaseIndicator:
+class BaseIndicator(Base):
 
     name: str
 

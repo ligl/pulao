@@ -1,7 +1,8 @@
 from pulao.constant import DecisionAction
+from pulao.object import Base
 
 
-class Decision:
+class Decision(Base):
     action: DecisionAction
 
     def __init__(self, action: DecisionAction):

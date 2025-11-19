@@ -1,7 +1,8 @@
 from pulao.key_zone import KeyZone
+from pulao.object import Base
 
 
-class SupplyDemand:
+class SupplyDemand(Base):
     key_zone: KeyZone
     strength: float
 
