@@ -1,20 +1,14 @@
 from typing import Any, Tuple
 
+from polars import DataFrame
+
 from pulao.events import Observable
 import polars as pl
 
+from pulao.swing import Swing
 from .swing import Swing
 from ..constant import EventType, SwingDirection, SwingPointType, SwingPointLevel
 from ..sbar import SBarManager, SBar
-
-
-class _CBar:
-    start_index: int  # 合并k线的开始索引（CBarManager）
-    end_index: int  # 合并k线的结束索引
-    high_price: float  # 合并后的最高价
-    low_price: float  # 合并后的最低价
-    swing_point: SwingPointType  # 波段高低点标识
-    swing_point_level: SwingPointLevel  # 波段高低点级别
 
 
 class SwingManager(Observable):
@@ -211,11 +205,9 @@ class SwingManager(Observable):
 
         if is_bottom_fractal or is_top_fractal:  # 是分形
             # region 找临近的底分形
-            start_index = (
-                100 if self.df_cbar.height > 100 else 0
-            )  # 优化：不用遍历所有数据，取最近100条数据做为标准，试想：100条都没有重叠的数据，还想啥！！
-
-            tmp_df = self.df_cbar.slice(start_index)
+            tmp_df = self.df_cbar.slice(
+                0
+            )  # 数据量大的时候可以考虑做优化，比如只找最近的100条
 
             prev_bottom_tmp = tmp_df.filter(
                 pl.col("swing_point_type") == SwingPointType.LOW.value
@@ -426,24 +418,124 @@ class SwingManager(Observable):
         else:  # 不是分形
             pass
 
-    def current_swing(self):
+    def current_swing(self) -> Swing | None:
         """
         当前波段（永远是未完成状态）
         """
-        start_index = (
-            self.df_cbar.filter(
-                (pl.col("swing_point_type") != SwingPointType.NONE)
+        start_index = self.get_current_swing_start_index()
+        current_swing_df = self.df_cbar.slice(start_index)
+        swing = _parse_swing(current_swing_df)
+        return swing
+
+    def prev_opposite_swing(self) -> Swing | None:
+        """
+        前一个与当前波段相反方向的波段
+        """
+        current_swing = self.current_swing()
+        if current_swing.direction == SwingDirection.UP:
+            prev_opposite_swing_point_type = SwingPointType.HIGH
+        else:
+            prev_opposite_swing_point_type = SwingPointType.LOW
+        prev_opposite_swing_start_index = (
+            self.df_cbar.slice(0, current_swing.index + 1)
+            .filter(
+                (pl.col("swing_point_type") == prev_opposite_swing_point_type)
                 & (pl.col("swing_point_level") == SwingPointLevel.CURRENT_TIMEFRAME)
             )
-            .tail(1)
-            .select(pl.col("index"))
+            .select(pl.col("index").last())
             .item()
         )
-        return self.df_cbar.slice(start_index)
+        if not prev_opposite_swing_start_index:
+            return None
+        prev_opposite_swing_df = self.df_cbar.slice(
+            prev_opposite_swing_start_index,
+            current_swing.index - prev_opposite_swing_start_index + 1,
+        )
+        swing = _parse_swing(prev_opposite_swing_df)
+        return swing
 
     def prev_same_swing(self):
         """
         前一个与当前波段相同方向的波段
+        """
+        prev_opposite_swing = self.prev_opposite_swing()
+        if prev_opposite_swing is None:
+            return None
+        prev_same_swing_end_index = (
+            self.df_cbar.filter(pl.col("index") == prev_opposite_swing.start_index)
+            .select(pl.col("index").last())
+            .item()
+        )
+
+        if prev_opposite_swing.direction == SwingDirection.UP:
+            prev_same_swing_point_type = SwingPointType.HIGH
+        else:
+            prev_same_swing_point_type = SwingPointType.LOW
+
+        prev_same_swing_start_index = (
+            self.df_cbar.slice(0, prev_same_swing_end_index + 1)
+            .filter(
+                (pl.col("swing_point_type") == prev_same_swing_point_type)
+                & (pl.col("swing_point_level") == SwingPointLevel.CURRENT_TIMEFRAME)
+            )
+            .select(pl.col("index").last())
+            .item()
+        )
+        if not prev_same_swing_start_index:
+            return None
+        prev_same_swing_df = self.df_cbar.slice(
+            prev_same_swing_start_index,
+            prev_opposite_swing.start_index - prev_same_swing_start_index + 1,
+        )
+        swing = _parse_swing(prev_same_swing_df)
+        return swing
+
+    def compare_swings(self) -> (float, SwingDirection):
+        """
+        当前正在形成的波段占最近已完成波段的回调比例，>1说明已经突破前一波段，<1说明相对前一波段的回调比例
+        """
+        #
+        # 当前波段最新价格与前一波段的关系分类：
+        # 1. 在其中
+        # 1.1 此时可以计算回调比例的关系
+        # 2. 在其外
+        # 2.1 已经超出前一波段的范围，说明已经突破了前波段高低点
+        #
+        current_swing = self.current_swing()
+        if current_swing is None:
+            return 0, SwingDirection.NONE
+        last_price = (
+            current_swing.high_price
+            if current_swing.direction == SwingDirection.UP
+            else current_swing.low_price
+        )
+        # 计算回调比例
+        # 波段高低点距离
+        prev_opposite_swing = self.prev_opposite_swing()
+        if prev_opposite_swing is None:  # 之前没有波段
+            return 0, SwingDirection.NONE
+
+        if prev_opposite_swing.direction == SwingDirection.UP:  # 上升波段
+            current_swing_distance = prev_opposite_swing.high_price - last_price
+        else:
+            # 下降波段
+            current_swing_distance = last_price - prev_opposite_swing.low_price
+        # 回调距离
+
+        pullback_ratio = (
+            current_swing_distance / prev_opposite_swing.distance
+        )  # 当前正在形成的波段与前波段的关系，>1说明已经突破前一波段，<1说明相对前一波段的回调比例
+        current_swing_direction = (
+            SwingDirection.UP
+            if prev_opposite_swing.direction == SwingDirection.DOWN
+            else SwingDirection.DOWN
+        )  # 当前正在形成波段的方向
+        return pullback_ratio, current_swing_direction
+
+    def get_current_swing_start_index(self) -> int:
+        """
+        取当前波段的开始索引
+        :return:
         """
         # 取当前波段的开始索引
         start_index = (
@@ -455,26 +547,7 @@ class SwingManager(Observable):
             .select(pl.col("index"))
             .item()
         )
-
-    def prev_opposite_swing(self):
-        """
-        前一个与当前波段相反方向的波段
-        """
-
-    def pullback_ratio(self, price: float = None) -> float:
-        """
-        价格占最近已完成波段的回调比例
-        """
-        if price is None:  # 以最新价计算
-            last_price = self.df_cbar.tail(1).select("close_price").item()
-            price = last_price
-        # 计算回调比例
-        # 波段高低点距离
-        swing_distance = 0
-        # 回调距离
-        pullback_distance = 0
-        pullback_ratio = pullback_distance / swing_distance
-        return pullback_ratio
+        return start_index
 
 
 def _get_fractal_range(left, middle, right) -> Tuple[float, float]:
@@ -514,3 +587,48 @@ def _is_price_range_overlap(
     if a_high_price < b_low_price:
         return False
     return True
+
+
+def _parse_swing(swing_df: pl.DataFrame) -> Swing | None:
+    """
+    解析Swing
+    :param swing_df: 包含波段高低点的数据集，第一行为波段起点，最后一行为波段终点
+    :return: Swing | None
+    """
+    if swing_df.is_empty():
+        return None
+
+    start_row = swing_df.row(0, named=True)
+    end_row = swing_df.tail(1).row(0, named=True)
+
+    swing = Swing()
+
+    swing.index = start_row["index"]
+
+    swing.start_index = start_row["index"]
+    swing.end_index = end_row["index"]
+
+    swing.start_index_bar = start_row["start_index"]
+    swing.end_index_bar = end_row["end_index"]
+
+    if start_row["swing_point_type"] == SwingPointType.LOW:
+        swing.direction = SwingDirection.UP
+    elif start_row["swing_point_type"] == SwingPointType.HIGH:
+        swing.direction = SwingDirection.DOWN
+    else:
+        swing.direction = SwingDirection.NONE
+
+    swing.high_price = max(start_row["high_price"], end_row["high_price"])
+    swing.low_price = min(start_row["low_price"], end_row["low_price"])
+
+    # 判断波段是否完成
+    if (
+        start_row["swing_point_level"] == end_row["swing_point_level"]
+        and start_row["swing_point_type"] != end_row["swing_point_type"]
+        and start_row["swing_point_type"] != SwingPointType.NONE
+        and end_row["swing_point_type"] != SwingPointType.NONE
+    ):
+        swing.is_completed = True
+    else:
+        swing.is_completed = False
+    return swing

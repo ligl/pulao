@@ -129,22 +129,3 @@ class SBarManager(Observable):
 
     def get_dataframe(self):
         return self.df
-
-def _sbar_to_row(bar: SBar) -> dict:
-    return {
-        "index": bar.index,
-        "symbol": bar.symbol,
-        "exchange": bar.exchange,
-        "interval": bar.interval,
-        "datetime": bar.datetime,
-        "volume": bar.volume,
-        "open_interest": bar.open_interest,
-        "open_price": bar.open_price,
-        "high_price": bar.high_price,
-        "low_price": bar.low_price,
-        "close_price": bar.close_price,
-        "swing_point_type": bar.swing_point_type.value,
-        "swing_point_level": bar.swing_point_type.value,
-        "ema_short": bar.ema_short,
-        "ema_long": bar.ema_long,
-    }

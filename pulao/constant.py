@@ -8,6 +8,16 @@ class BaseEnum(Enum):
     def __str__(self):
         return self.value
 
+    def __eq__(self, other):
+        # 如果 other 的类型与 value 相同，则按 value 比较
+        if isinstance(other, type(self.value)):
+            return self.value == other
+        return super().__eq__(other)
+
+    def __ne__(self, other):
+        # 明确返回不等于 __eq__ 的否定
+        return not self.__eq__(other)
+
     @classmethod
     def parse(cls,value: str):
         for member in cls:
