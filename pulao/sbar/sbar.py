@@ -4,10 +4,11 @@ from datetime import datetime as Datetime
 
 from vnpy.trader.object import BarData
 
-from pulao.object import Base
+from pulao.object import BaseDecorator
 
 
-class SBar(Base):
+@BaseDecorator()
+class SBar:
     """
     SuperBar , BarData扩展
     """

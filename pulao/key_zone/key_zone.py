@@ -2,11 +2,12 @@ from abc import ABC, abstractmethod
 from typing import List, Optional, Dict
 
 from pulao.constant import KeyZoneOrigin, KeyZoneType
-from pulao.object import Base
+from pulao.object import BaseDecorator
 from pulao.swing import Swing
 from pulao.trend import Trend
 
-class KeyZone(Base,ABC):
+@BaseDecorator()
+class KeyZone(ABC):
     start_index: int
     end_index: int
     price_low: float

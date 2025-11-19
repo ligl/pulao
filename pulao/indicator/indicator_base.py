@@ -3,15 +3,15 @@ from __future__ import annotations
 
 from typing import Any, List
 
-from pulao.object import Base
+from pulao.object import BaseDecorator
 from pulao.sbar import SBar
 
 
 # -----------------------------
 # Indicator base classes
 # -----------------------------
-
-class BaseIndicator(Base):
+@BaseDecorator()
+class BaseIndicator:
 
     name: str
 

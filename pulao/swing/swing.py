@@ -1,8 +1,9 @@
 from pulao.constant import SwingDirection, SwingPointType
-from pulao.object import Base
+from pulao.object import BaseDecorator
 
 
-class Swing(Base):
+@BaseDecorator()
+class Swing:
     index: int = 0
     direction: SwingDirection = SwingDirection.NONE  # "up" / "down"
     start_index: int = 0  # 波段起始点索引 cbar_df

@@ -1,7 +1,8 @@
 from pulao.constant import DecisionAction
-from pulao.object import Base
+from pulao.object import BaseDecorator
 
 
+@BaseDecorator
 class Decision(Base):
     action: DecisionAction
 

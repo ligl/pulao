@@ -1,8 +1,9 @@
 from pulao.key_zone import KeyZone
-from pulao.object import Base
+from pulao.object import BaseDecorator
 
 
-class SupplyDemand(Base):
+@BaseDecorator()
+class SupplyDemand:
     key_zone: KeyZone
     strength: float
 
