@@ -7,7 +7,7 @@ import polars as pl
 
 from pulao.swing import Swing
 from .swing import Swing
-from ..constant import EventType, SwingDirection, SwingPointType, SwingPointLevel, LOOKBACK_LIMIT
+from ..constant import EventType, SwingDirection, SwingPointType, SwingPointLevel, Const
 from ..sbar import SBarManager, SBar
 
 class SwingManager(Observable):
@@ -203,7 +203,7 @@ class SwingManager(Observable):
         if is_bottom_fractal or is_top_fractal:  # 是分形
             # region 找临近的底分形
             tmp_df = self.df_cbar.slice(
-                 self.df_cbar.height - LOOKBACK_LIMIT if self.df_cbar.height - LOOKBACK_LIMIT > 0 else 0
+                 self.df_cbar.height - Const.LOOKBACK_LIMIT.value if self.df_cbar.height - Const.LOOKBACK_LIMIT.value > 0 else 0
             )
 
             prev_bottom_tmp = tmp_df.filter(
@@ -434,7 +434,7 @@ class SwingManager(Observable):
                 end_swing_point_type = SwingPointType.HIGH
             else:# 给定index不是一个波段的起点
                 return None
-            end_index = self.df_cbar.slice( start_index , LOOKBACK_LIMIT).filter(
+            end_index = self.df_cbar.slice( start_index , Const.LOOKBACK_LIMIT.value).filter(
                 (pl.col("swing_point_type") == end_swing_point_type)
                 & (pl.col("swing_point_level") == SwingPointLevel.CURRENT_TIMEFRAME)
             ).select(pl.col("index").last()).item()
@@ -458,7 +458,7 @@ class SwingManager(Observable):
             prev_opposite_swing_point_type = SwingPointType.LOW
 
         prev_opposite_swing_end_index = current_swing.index
-        slice_index = prev_opposite_swing_end_index - LOOKBACK_LIMIT if prev_opposite_swing_end_index > LOOKBACK_LIMIT else 0
+        slice_index = prev_opposite_swing_end_index - Const.LOOKBACK_LIMIT.value if prev_opposite_swing_end_index > Const.LOOKBACK_LIMIT.value else 0
         prev_opposite_swing_start_index = (
             self.df_cbar.slice( slice_index ,  prev_opposite_swing_end_index - slice_index + 1)
             .filter(
@@ -493,7 +493,7 @@ class SwingManager(Observable):
         else:
             prev_same_swing_point_type = SwingPointType.LOW
 
-        slice_index = prev_same_swing_end_index - LOOKBACK_LIMIT if prev_same_swing_end_index > LOOKBACK_LIMIT else 0
+        slice_index = prev_same_swing_end_index - Const.LOOKBACK_LIMIT.value if prev_same_swing_end_index > Const.LOOKBACK_LIMIT.value else 0
         prev_same_swing_start_index = (
             self.df_cbar.slice(slice_index, prev_same_swing_end_index - slice_index + 1)
             .filter(
@@ -511,6 +511,26 @@ class SwingManager(Observable):
         )
         swing = _parse_swing(prev_same_swing_df)
         return swing
+
+    def prev_swing(self, index:int = None) -> Swing | None:
+        """
+        查指定波段的前一个波段（与prev_opposite_swing等效）
+        :param index: 指定index所在的波段，如果没有指定，获取最新波段
+        :return: Swing | None
+        """
+        return self.prev_opposite_swing(index)
+
+    def get_swing_list(self, start_index:int, end_index:int):
+        """
+        获取波段列表
+        :param start_index:
+        :param end_index:
+        :return:
+        """
+        return self.df_cbar.slice(start_index,
+                                         end_index - start_index + 1).filter(
+            (pl.col("swing_point_type") != SwingPointType.NONE) & (
+                    pl.col("swing_point_level") == SwingPointLevel.CURRENT_TIMEFRAME))
 
     def compare_swings(self) -> (float, SwingDirection):
         """
