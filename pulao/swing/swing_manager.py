@@ -416,28 +416,51 @@ class SwingManager(Observable):
         else:  # 不是分形
             pass
 
-    def current_swing(self) -> Swing | None:
+    def get_swing(self, index:int=None) -> Swing | None:
         """
-        当前波段（永远是未完成状态）
+        获取指定波段
+        :param index: 指定index开始的波段，如果没有指定，获取最新波段
+        :return: Swing | None
         """
-        start_index = self.get_current_swing_start_index()
-        current_swing_df = self.df_cbar.slice(start_index)
+        if index is None:
+            start_index = self.get_current_swing_start_index()
+            end_index = self.df_cbar.height - 1
+        else:
+            start_index = index
+            start_swing_point_type = self.df_cbar.filter(pl.col("index") == start_index).select(pl.col("swing_point_type").last()).item()
+            if start_swing_point_type == SwingPointType.HIGH:
+                end_swing_point_type = SwingPointType.LOW
+            elif start_swing_point_type == SwingPointType.LOW:
+                end_swing_point_type = SwingPointType.HIGH
+            else:# 给定index不是一个波段的起点
+                return None
+            end_index = self.df_cbar.slice( start_index , LOOKBACK_LIMIT).filter(
+                (pl.col("swing_point_type") == end_swing_point_type)
+                & (pl.col("swing_point_level") == SwingPointLevel.CURRENT_TIMEFRAME)
+            ).select(pl.col("index").last()).item()
+            end_index = self.df_cbar.height - 1 if not end_index else end_index # 如果没有查到波段终点，说明波段并未结束
+        current_swing_df = self.df_cbar.slice(start_index, end_index - start_index + 1)
         swing = _parse_swing(current_swing_df)
         return swing
 
-    def prev_opposite_swing(self) -> Swing | None:
+    def prev_opposite_swing(self, index:int = None) -> Swing | None:
         """
-        前一个与当前波段相反方向的波段
+        前一个与指定波段相反方向的波段
+        :param index: 指定index所在的波段，如果没有指定，获取最新波段
+        :return: Swing | None
         """
-        current_swing = self.current_swing()
+        current_swing = self.get_swing(index)
+        if current_swing is None:
+            return None
         if current_swing.direction == SwingDirection.UP:
             prev_opposite_swing_point_type = SwingPointType.HIGH
         else:
             prev_opposite_swing_point_type = SwingPointType.LOW
 
-        slice_index = current_swing.index - LOOKBACK_LIMIT if current_swing.index > LOOKBACK_LIMIT else 0
+        prev_opposite_swing_end_index = current_swing.index
+        slice_index = prev_opposite_swing_end_index - LOOKBACK_LIMIT if prev_opposite_swing_end_index > LOOKBACK_LIMIT else 0
         prev_opposite_swing_start_index = (
-            self.df_cbar.slice( slice_index , current_swing.index - slice_index + 1)
+            self.df_cbar.slice( slice_index ,  prev_opposite_swing_end_index - slice_index + 1)
             .filter(
                 (pl.col("swing_point_type") == prev_opposite_swing_point_type)
                 & (pl.col("swing_point_level") == SwingPointLevel.CURRENT_TIMEFRAME)
@@ -449,23 +472,21 @@ class SwingManager(Observable):
             return None
         prev_opposite_swing_df = self.df_cbar.slice(
             prev_opposite_swing_start_index,
-            current_swing.index - prev_opposite_swing_start_index + 1,
+            prev_opposite_swing_end_index - prev_opposite_swing_start_index + 1,
         )
         swing = _parse_swing(prev_opposite_swing_df)
         return swing
 
-    def prev_same_swing(self):
+    def prev_same_swing(self, index:int = None) -> Swing | None:
         """
-        前一个与当前波段相同方向的波段
+        前一个与指定波段相同方向的波段
+        :param index: 指定index所在的波段，如果没有指定，获取最新波段
+        :return: Swing | None
         """
-        prev_opposite_swing = self.prev_opposite_swing()
+        prev_opposite_swing = self.prev_opposite_swing(index)
         if prev_opposite_swing is None:
             return None
-        prev_same_swing_end_index = (
-            self.df_cbar.filter(pl.col("index") == prev_opposite_swing.start_index)
-            .select(pl.col("index").last())
-            .item()
-        )
+        prev_same_swing_end_index = prev_opposite_swing.index
 
         if prev_opposite_swing.direction == SwingDirection.UP:
             prev_same_swing_point_type = SwingPointType.HIGH
@@ -486,7 +507,7 @@ class SwingManager(Observable):
             return None
         prev_same_swing_df = self.df_cbar.slice(
             prev_same_swing_start_index,
-            prev_opposite_swing.start_index - prev_same_swing_start_index + 1,
+            prev_same_swing_end_index - prev_same_swing_start_index + 1,
         )
         swing = _parse_swing(prev_same_swing_df)
         return swing
@@ -502,7 +523,7 @@ class SwingManager(Observable):
         # 2. 在其外
         # 2.1 已经超出前一波段的范围，说明已经突破了前波段高低点
         #
-        current_swing = self.current_swing()
+        current_swing = self.get_swing()
         if current_swing is None:
             return 0, SwingDirection.NONE
         last_price = (
@@ -544,8 +565,7 @@ class SwingManager(Observable):
                 (pl.col("swing_point_type") != SwingPointType.NONE)
                 & (pl.col("swing_point_level") == SwingPointLevel.CURRENT_TIMEFRAME)
             )
-            .tail(1)
-            .select(pl.col("index"))
+            .select(pl.col("index").last())
             .item()
         )
         return start_index
@@ -590,17 +610,17 @@ def _is_price_range_overlap(
     return True
 
 
-def _parse_swing(swing_df: pl.DataFrame) -> Swing | None:
+def _parse_swing(cbar_df: pl.DataFrame) -> Swing | None:
     """
     解析Swing
-    :param swing_df: 包含波段高低点的数据集，第一行为波段起点，最后一行为波段终点
+    :param cbar_df: 包含波段高低点的数据集，第一行为波段起点，最后一行为波段终点
     :return: Swing | None
     """
-    if swing_df.is_empty():
+    if cbar_df.is_empty():
         return None
 
-    start_row = swing_df.row(0, named=True)
-    end_row = swing_df.tail(1).row(0, named=True)
+    start_row = cbar_df.row(0, named=True)
+    end_row = cbar_df.tail(1).row(0, named=True)
 
     swing = Swing()
 

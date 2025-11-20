@@ -34,3 +34,4 @@ class Swing:
         elif self.direction == SwingDirection.DOWN:
             return (self.high_price - price) / span
         return (price - self.low_price) / span
+
