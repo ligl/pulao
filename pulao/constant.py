@@ -25,13 +25,18 @@ class BaseEnum(Enum):
 
         raise ValueError(f"{value!r} is not a valid {cls.__name__}")
 
+class ReadOnlyMeta(type):
+    def __call__(cls, *args, **kwargs):
+        raise TypeError(f"Class: {cls.__name__} cannot be instantiated")
 
-class Const(BaseEnum):
+    def __setattr__(cls, name, value):
+        raise AttributeError(f"Class attribute: '{name}' is read-only")
+
+class Const(metaclass=ReadOnlyMeta):
     DEBUG: bool = True  # 系统模式
     LOOKBACK_LIMIT: int = (
         300  # 检查前一个波段/趋势时，向前回溯的K线数量，越过这个数量就不再关注
     )
-
 
 class SwingPointType(BaseEnum):
     """

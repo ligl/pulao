@@ -203,7 +203,7 @@ class SwingManager(Observable):
         if is_bottom_fractal or is_top_fractal:  # 是分形
             # region 找临近的底分形
             tmp_df = self.df_cbar.slice(
-                 self.df_cbar.height - Const.LOOKBACK_LIMIT.value if self.df_cbar.height - Const.LOOKBACK_LIMIT.value > 0 else 0
+                 self.df_cbar.height - Const.LOOKBACK_LIMIT if self.df_cbar.height - Const.LOOKBACK_LIMIT > 0 else 0
             )
 
             prev_bottom_tmp = tmp_df.filter(
@@ -434,7 +434,7 @@ class SwingManager(Observable):
                 end_swing_point_type = SwingPointType.HIGH
             else:# 给定index不是一个波段的起点
                 return None
-            end_index = self.df_cbar.slice( start_index , Const.LOOKBACK_LIMIT.value).filter(
+            end_index = self.df_cbar.slice( start_index , Const.LOOKBACK_LIMIT).filter(
                 (pl.col("swing_point_type") == end_swing_point_type)
                 & (pl.col("swing_point_level") == SwingPointLevel.CURRENT_TIMEFRAME)
             ).select(pl.col("index").last()).item()
@@ -458,7 +458,7 @@ class SwingManager(Observable):
             prev_opposite_swing_point_type = SwingPointType.LOW
 
         prev_opposite_swing_end_index = current_swing.index
-        slice_index = prev_opposite_swing_end_index - Const.LOOKBACK_LIMIT.value if prev_opposite_swing_end_index > Const.LOOKBACK_LIMIT.value else 0
+        slice_index = prev_opposite_swing_end_index - Const.LOOKBACK_LIMIT if prev_opposite_swing_end_index > Const.LOOKBACK_LIMIT else 0
         prev_opposite_swing_start_index = (
             self.df_cbar.slice( slice_index ,  prev_opposite_swing_end_index - slice_index + 1)
             .filter(
@@ -493,7 +493,7 @@ class SwingManager(Observable):
         else:
             prev_same_swing_point_type = SwingPointType.LOW
 
-        slice_index = prev_same_swing_end_index - Const.LOOKBACK_LIMIT.value if prev_same_swing_end_index > Const.LOOKBACK_LIMIT.value else 0
+        slice_index = prev_same_swing_end_index - Const.LOOKBACK_LIMIT if prev_same_swing_end_index > Const.LOOKBACK_LIMIT else 0
         prev_same_swing_start_index = (
             self.df_cbar.slice(slice_index, prev_same_swing_end_index - slice_index + 1)
             .filter(
