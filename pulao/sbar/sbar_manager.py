@@ -1,5 +1,3 @@
-from typing import Any, Iterable
-
 from polars import Datetime
 
 from pulao.events import Observable

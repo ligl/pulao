@@ -1,11 +1,8 @@
 from typing import Any, Tuple
 
-from polars import DataFrame
-
 from pulao.events import Observable
 import polars as pl
 
-from pulao.swing import Swing
 from .swing import Swing
 from ..constant import EventType, SwingDirection, SwingPointType, SwingPointLevel, Const
 from ..sbar import SBarManager, SBar

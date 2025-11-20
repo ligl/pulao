@@ -1,9 +1,8 @@
-from typing import List, Any
+from typing import Any
 from pulao.events import Observable
 from .trend import Trend
-from ..constant import EventType, TrendDirection, SwingPointType, SwingPointLevel
-from ..swing import SwingManager, Swing
-import polars as pl
+from ..constant import EventType, TrendDirection
+from ..swing import SwingManager
 
 
 class TrendManager(Observable):
