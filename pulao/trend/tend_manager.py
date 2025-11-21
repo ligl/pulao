@@ -134,21 +134,42 @@ class TrendManager(Observable):
 
     def prev_opposite_trend(self, index:int=None) -> Trend | None:
         """
-        前一个与当前趋势相反方向的趋势
+        前一个与指定趋势相反方向的趋势
         :param index: 指定趋势，如果未指定，获取最新的趋势
         :return: Trend or None
         """
-
+        raise NotImplementedError("未实现")
 
     def prev_same_trend(self, index:int=None):
         """
-        前一个与当前趋势相同方向的趋势
+        前一个与指定趋势相同方向的趋势
+        :param index: 指定趋势，如果未指定，获取最新的趋势
+        :return: Trend or None
+        """
+        raise NotImplementedError("未实现")
+
+    def next_opposite_trend(self, index:int=None) -> Trend | None:
+        """
+        后一个与指定趋势相反方向的趋势
+        :param index: 指定趋势，如果未指定，获取最新的趋势
+        :return: Trend or None
+        """
+        raise NotImplementedError("未实现")
+
+    def next_same_trend(self, index:int=None) -> Trend | None:
+        """
+        后一个与指定趋势相同方向的趋势
         :param index: 指定趋势，如果未指定，获取最新的趋势
         :return: Trend or None
         """
 
+        raise NotImplementedError("未实现")
+
+    def prev(self, index:int=None) -> Trend | None:
+        return self.prev_opposite_trend(index)
+
+    def next(self, index:int=None) -> Trend | None:
+        return self.next_opposite_trend(index)
+
     def get_swing_list(self, trend:Trend):
         return self.swing_manager.get_swing_list(trend.start_index, trend.end_index)
-
-    def add(self, trend: Trend):
-        self.notify(EventType.TREND_CHANGED, trend)

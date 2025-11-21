@@ -60,29 +60,6 @@ class SBar:
         for k, v in kwargs.items():
             setattr(self, k, v)
 
-    def to_schema(self):
-        return {
-            "index": self.index,
-            "symbol": self.symbol,
-            "exchange": self.exchange,
-            "interval": self.interval,
-            "datetime": self.datetime,
-            "volume": self.volume,
-            "open_interest": self.open_interest,
-            "open_price": self.open_price,
-            "high_price": self.high_price,
-            "low_price": self.low_price,
-            "close_price": self.close_price,
-            "swing_point_type": self.swing_point_type.value
-            if self.swing_point_type is not None
-            else SwingPointType.NONE.value,
-            "swing_point_level": self.swing_point_level.value
-            if self.swing_point_level is not None
-            else SwingPointLevel.NONE.value,
-            "ema_short": self.ema_short,
-            "ema_long": self.ema_long,
-        }
-
     @property
     def body(self) -> float:
         """实体长度"""
