@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import List, Any
 
 from pulao.constant import (
@@ -11,6 +13,7 @@ from pulao.events import Observable
 from pulao.bar import SBar, SBarManager, CBar, Fractal
 
 import polars as pl
+
 
 class CBarManager(Observable):
     sbar_manager: SBarManager
@@ -270,244 +273,24 @@ class CBarManager(Observable):
         # 3.1 如果有连续多个顶分形，调整最后一个为本级别，其他为次级别
         # 3.2 如果有连续多个底分形，调整最后一个为本级别，其他为次级别
         #
+        # 步骤，
+        # 1. 包含合并处理，顶底分形判断基础生成，默认分形都为本级别
+        # 2. 分形重叠处理，把低波动噪音去掉，有重叠的分形降级为次级别
+        # 3. 本级别连续同向分形处理，连续同向分形保留最后一个，其他降级为次级别
+        # 4. 异常强劲的次级别处理，提升为本级别【具体怎么做？】
+        #
         # endregion
 
-        # region 1. 如果相邻顶底分形有重叠区域，先调整为次级别
-        def _process_fractal_overlap():
-            """
-            如果相邻顶底分形有重叠区域，先调整为次级别
-            """
-            # region 算法说明
-            #
-            # 1. 逐步计算相邻分形是否有重叠区域
-            # 1.1 如果有重叠，检查是否有同向分形，
-            # 1.2 如果为同向分形，把次高/次低的调整为次级别
-            # 1.3 如果不是同向分形，把后者调整为次级别（前者更可能先被人眼认定）
-            #
-            # endregion
-
-            # 取最新的一段数据进行重整，久远的数据级别已经固定，不用处理
-            df_fractals = self.df_cbar.tail(
-                Const.LOOKBACK_LIMIT
-                if self.df_cbar.height > Const.LOOKBACK_LIMIT
-                else self.df_cbar.height
-            ).filter(pl.col("swing_point_type") != SwingPointType.NONE)
-
-            cbar_list = []
-            prev_row = None
-            # 从新数据往旧数据遍历，判断前后两个波段点是否有重叠区域
-            for i in range(df_fractals.height - 1, -1, -1):
-                curr_row = df_fractals.row(i, named=True)
-                if prev_row is None:
-                    prev_row = curr_row
-                    continue
-
-                prev_fractal = self.get_fractal(prev_row["index"])
-                curr_fractal = self.get_fractal(curr_row["index"])
-                if not curr_fractal.overlap(prev_fractal):
-                    continue
-                # 有重叠，修改后者为次级别（前者更可能先被人眼认定）
-                if prev_row["swing_point_type"] == curr_row["swing_point_type"]:
-                    # 两者为同向分形，把次高/次低的调整为次级别
-                    if curr_row["swing_point_type"] == SwingPointType.HIGH:
-                        if curr_row["high_price"] > prev_row["high_price"]:
-                            if prev_row["swing_point_level"] != SwingPointLevel.MINOR:
-                                prev_row["swing_point_level"] = SwingPointLevel.MINOR
-                                cbar_list.append(prev_row)
-                        else:
-                            if curr_row["swing_point_level"] != SwingPointLevel.MINOR:
-                                curr_row["swing_point_level"] = SwingPointLevel.MINOR
-                                cbar_list.append(curr_row)
-                    else:  # SwingPointType.LOW
-                        if curr_row["low_price"] < prev_row["low_price"]:
-                            if prev_row["swing_point_level"] != SwingPointLevel.MINOR:
-                                prev_row["swing_point_level"] = SwingPointLevel.MINOR
-                                cbar_list.append(prev_row)
-                        else:
-                            if curr_row["swing_point_level"] != SwingPointLevel.MINOR:
-                                curr_row["swing_point_level"] = SwingPointLevel.MINOR
-                                cbar_list.append(curr_row)
-                else:
-                    # 两者非同向分形
-                    if prev_row["swing_point_level"] != SwingPointLevel.MINOR:
-                        prev_row["swing_point_level"] = SwingPointLevel.MINOR
-                        cbar_list.append(prev_row)
-                prev_row = curr_row
-            if cbar_list:
-                self.update_swing_point_level(cbar_list)
-
-        # endregion
-
-        # region 2. 如果由次级别组成的波段，形成了一段上涨一段下跌的结构，则顶点调整为本级别，反之亦复如是
-        def _process_secondary_swing():
-            """
-            # 疑问：次级别会有上涨或下跌趋势吗？只能是区间震荡吧
-            2. 以顶底分形为准，对连续次级别构建HH/HL/LL/LH波段结构，判断波段方向是上涨、下跌还是横盘区间，然后对分形进行级别划定
-            2.1 如果由次级别组成的波段，形成了一段上涨一段下跌的结构，则把端点调整为本级别
-            2.2 如果次级别组成的波段，形成了横盘区间，把区间的最低点（若未来价格离开区间向上）或最高点（若未来离开向下）调整为本级别
-            """
-            # 取最新的一段数据进行处理，久远的数据级别已经固定，不用处理
-            df_fractals = self.df_cbar.tail(
-                Const.LOOKBACK_LIMIT
-                if self.df_cbar.height > Const.LOOKBACK_LIMIT
-                else self.df_cbar.height
-            ).filter(pl.col("swing_point_type") != SwingPointType.NONE)
-
-            secondary_fractal_list = []
-            prev_primary_fractal = None
-            secondary_high = None  # 一段连续次级别中最高的顶分形
-            secondary_low = None  # 一段连续次级别中最低的底分形
-            changed_cbar_list = []  # 需要调整级别的顶底分形列表
-            # 从新数据往旧数据遍历
-            for i in range(df_fractals.height - 1, -1, -1):
-                curr_row = df_fractals.row(i, named=True)
-                if curr_row["swing_point_level"] == SwingPointLevel.MINOR:
-                    # 次级别开始，记录连续次级别，并判断趋势
-                    secondary_fractal_list.append(curr_row)
-
-                    if curr_row["swing_point_type"] == SwingPointType.HIGH:
-                        if secondary_high is None:
-                            secondary_high = curr_row
-                        elif secondary_high["high_price"] < curr_row["high_price"]:
-                            secondary_high = curr_row
-                    else:
-                        if secondary_low is None:
-                            secondary_low = curr_row
-                        elif secondary_low["low_price"] > curr_row["low_price"]:
-                            secondary_low = curr_row
-
-                elif curr_row["swing_point_level"] == SwingPointLevel.MAJOR:
-                    # 本级别开始
-                    # 判断次级别趋势，调整级别，清空次级别列表重新记录
-                    if secondary_high:  # 说明两个本级别之间存在次级别
-                        if (
-                            secondary_high is None or secondary_low is None
-                        ):  # 说明两个本级别之间只有一个次级别
-                            # 疑问：实盘中什么情况下会出现？好像不可能，如果两个本级别之间只有一个次级别，那次级别是怎么确认的？
-                            pass
-                        else:  # 有多个次级别
-                            if prev_primary_fractal is None:
-                                # 本级别尚未走完
-                                pass
-                            else:  # 次级别是在两个本级别中间
-                                if (
-                                    prev_primary_fractal["swing_point_type"]
-                                    == curr_row["swing_point_type"]
-                                ):
-                                    # 两个本级别同方向，需要次级别的波动高低点相连
-                                    if (
-                                        curr_row["swing_point_type"]
-                                        == SwingPointType.HIGH
-                                    ):
-                                        # 本级别顶分形，需要找次级别的最小底分形相连
-                                        secondary_low["swing_point_level"] = (
-                                            SwingPointLevel.MAJOR
-                                        )
-                                        # 更新数据源
-                                        changed_cbar_list.append(secondary_low)
-                                    else:
-                                        # 找次级别顶分形相连
-                                        secondary_high["swing_point_level"] = (
-                                            SwingPointLevel.MAJOR
-                                        )
-                                        # 更新数据源
-                                        changed_cbar_list.append(secondary_high)
-                                else:
-                                    # 两个本级别反向，正好顶底相连，需要判断是否需要调整高低点边线
-                                    if (
-                                        curr_row["swing_point_type"]
-                                        == SwingPointType.HIGH
-                                    ):
-                                        # 本级别顶分形，判断当前分形的高点是否比次级别最高分形大
-                                        if (
-                                            curr_row["high_price"]
-                                            < secondary_high["high_price"]
-                                        ):
-                                            # 更改端点
-                                            curr_row["swing_point_level"] = (
-                                                SwingPointLevel.MINOR
-                                            )
-                                            secondary_high["swing_point_level"] = (
-                                                SwingPointLevel.MAJOR
-                                            )
-                                            # 更新数据源
-                                            changed_cbar_list.append(secondary_high)
-                                            changed_cbar_list.append(curr_row)
-                                    else:
-                                        # 本级别底分形，判断当前分形的低点是否比次级别最低分形小
-                                        if (
-                                            curr_row["low_price"]
-                                            > secondary_low["low_price"]
-                                        ):
-                                            # 更改端点
-                                            curr_row["swing_point_level"] = (
-                                                SwingPointLevel.MINOR
-                                            )
-                                            secondary_low["swing_point_level"] = (
-                                                SwingPointLevel.MAJOR
-                                            )
-                                            # 更新数据源
-                                            changed_cbar_list.append(secondary_low)
-                                            changed_cbar_list.append(curr_row)
-                    else:  # 没有次级别
-                        pass
-
-                    secondary_fractal_list.clear()
-
-                    prev_primary_fractal = curr_row
-
-            if changed_cbar_list:
-                self.update_swing_point_level(changed_cbar_list)
-
-        # endregion
-
-        # region 3. 处理连续同级别同向分形，比如连续多个顶分形，调整最后一个为本级别，其他为次级别
-        def _process_consecutive_same_fractals():
-            """
-            处理本级别连续同向分形，比如连续多个顶分形，调整最后一个为本级别，其他为次级别
-            """
-            # 取最新的一段数据进行处理，久远的数据级别已经固定，不用处理
-            df_fractals = self.df_cbar.tail(
-                Const.LOOKBACK_LIMIT
-                if self.df_cbar.height > Const.LOOKBACK_LIMIT
-                else self.df_cbar.height
-            ).filter(
-                (pl.col("swing_point_type") != SwingPointType.NONE)
-                & (pl.col("swing_point_level") == SwingPointLevel.MAJOR)
-            )
-
-            prev_row = None
-            changed_cbar_list = []  # 需要调整级别的顶底分形列表
-            # 从新数据往旧数据遍历
-            for i in range(df_fractals.height - 1, -1, -1):
-                curr_row = df_fractals.row(i, named=True)
-                if prev_row is None:
-                    prev_row = curr_row
-                    continue
-                if curr_row["swing_point_type"] == prev_row["swing_point_type"]:
-                    # 两分形同向，处理级别
-                    if curr_row["swing_point_type"] == SwingPointType.HIGH:
-                        if curr_row["high_price"] < prev_row["high_price"]:
-                            pass
-                    else:
-                        pass
-                else:
-                    # 顶底/底顶相连，不用处理
-                    pass
-
-        def _validate():
-            """
-            验证处理结果是否正确，结果必须是本级别高低点交错出现
-            """
-
-        # endregion
         # 依次执行处理函数
-        _process_fractal_overlap()
-        # _process_secondary_swing()
-        # _process_consecutive_same_fractals()
-        _validate()
+        while True:
+            self._process_fractal_overlap()
+            # self._process_consecutive_same_fractals()
+            # self._process_secondary_swing()
+            if self._validate():
+                break
 
-    def update_swing_point_level(self, cbar_list: List):
+
+    def update_swing_point_level(self, cbar_list: List[CBar]):
         """
         更新分形中对应bar的波段高低点级别
         """
@@ -517,17 +300,17 @@ class CBarManager(Observable):
         expr_cbar = pl.col("swing_point_level")
         for cbar in cbar_list:
             sbar_df = self.sbar_manager.get_range_index(
-                cbar["start_index"],
-                cbar["end_index"],
+                cbar.start_index,
+                cbar.end_index,
             )
             # 顶分形取最高价的bar，低分形取最低价的bar
-            if cbar["swing_point_type"] == SwingPointType.LOW:
+            if cbar.swing_point_type == SwingPointType.LOW:
                 bar_index = (
                     sbar_df.filter(pl.col("low_price") == pl.col("low_price").min())
                     .select("index")
                     .item()
                 )
-            elif cbar["swing_point_type"] == SwingPointType.HIGH:
+            elif cbar.swing_point_type == SwingPointType.HIGH:
                 bar_index = (
                     sbar_df.filter(pl.col("high_price") == pl.col("high_price").max())
                     .select("index")
@@ -538,12 +321,12 @@ class CBarManager(Observable):
 
             expr_sbar = (
                 pl.when(pl.col("index") == bar_index)
-                .then(pl.lit(cbar["swing_point_level"]))
+                .then(pl.lit(cbar.swing_point_level))
                 .otherwise(expr_sbar)
             )
             expr_cbar = (
-                pl.when(pl.col("index") == cbar["index"])
-                .then(pl.lit(cbar["swing_point_level"]))
+                pl.when(pl.col("index") == cbar.index)
+                .then(pl.lit(cbar.swing_point_level))
                 .otherwise(expr_cbar)
             )
             # 1. 更新数据源-sbar_df
@@ -553,7 +336,7 @@ class CBarManager(Observable):
                 expr_cbar.alias("swing_point_level")
             )
 
-    def get_fractal(self, index: int)->Fractal | None:
+    def get_fractal(self, index: int) -> Fractal | None:
         start_index = index - 1
         end_index = index + 1
         rows = self.df_cbar.slice(start_index, end_index - start_index + 1).rows(
@@ -561,4 +344,219 @@ class CBarManager(Observable):
         )
         if len(rows) != 3:
             return None
-        return Fractal(left=CBar(**rows[0]),middle=CBar(**rows[1]),right=CBar(**rows[2]))
+        return Fractal(
+            left=CBar(**rows[0]), middle=CBar(**rows[1]), right=CBar(**rows[2])
+        )
+
+    def _process_fractal_overlap(self):
+        """
+        如果相邻顶底分形有重叠区域，先调整为次级别
+        """
+        # region 算法说明
+        #
+        # 1. 逐步计算相邻分形是否有重叠区域
+        # 1.1 如果有重叠，检查是否有同向分形，
+        # 1.2 如果为同向分形，把次高/次低的调整为次级别
+        # 1.3 如果不是同向分形，把后者调整为次级别（前者更可能先被人眼认定）
+        #
+        # endregion
+
+        # 取最新的一段数据进行重整，久远的数据级别已经固定，不用处理
+        df_fractals = self.df_cbar.tail(
+            Const.LOOKBACK_LIMIT
+            if self.df_cbar.height > Const.LOOKBACK_LIMIT
+            else self.df_cbar.height
+        ).filter(pl.col("swing_point_type") != SwingPointType.NONE)
+
+        cbar_list = []
+        prev_cbar = None
+        # 从新数据往旧数据遍历，判断前后两个波段点是否有重叠区域
+        for i in range(df_fractals.height - 1, -1, -1):
+            curr_cbar = CBar(**df_fractals.row(i, named=True))
+            if prev_cbar is None:
+                prev_cbar = curr_cbar
+                continue
+
+            prev_fractal = self.get_fractal(prev_cbar.index)
+            curr_fractal = self.get_fractal(curr_cbar.index)
+            if not curr_fractal.overlap(prev_fractal):
+                continue
+            # 有重叠，修改后者为次级别（前者更可能先被人眼认定）
+            if prev_cbar.swing_point_type == curr_cbar.swing_point_type:
+                # 两者为同向分形，把次高/次低的调整为次级别
+                if curr_cbar.swing_point_type == SwingPointType.HIGH:
+                    if curr_cbar.high_price > prev_cbar.high_price:
+                        if prev_cbar.swing_point_level != SwingPointLevel.MINOR:
+                            prev_cbar.swing_point_level = SwingPointLevel.MINOR
+                            cbar_list.append(prev_cbar)
+                    else:
+                        if curr_cbar.swing_point_level != SwingPointLevel.MINOR:
+                            curr_cbar.swing_point_level = SwingPointLevel.MINOR
+                            cbar_list.append(curr_cbar)
+                else:  # SwingPointType.LOW
+                    if curr_cbar.low_price < prev_cbar.low_price:
+                        if prev_cbar.swing_point_level != SwingPointLevel.MINOR:
+                            prev_cbar.swing_point_level = SwingPointLevel.MINOR
+                            cbar_list.append(prev_cbar)
+                    else:
+                        if curr_cbar.swing_point_level != SwingPointLevel.MINOR:
+                            curr_cbar.swing_point_level = SwingPointLevel.MINOR
+                            cbar_list.append(curr_cbar)
+            else:
+                # 两者非同向分形
+                if prev_cbar.swing_point_level != SwingPointLevel.MINOR:
+                    prev_cbar.swing_point_level = SwingPointLevel.MINOR
+                    cbar_list.append(prev_cbar)
+            prev_cbar = curr_cbar
+        if cbar_list:
+            self.update_swing_point_level(cbar_list)
+
+    def _process_secondary_swing(self):
+        """
+        # 疑问：次级别会有上涨或下跌趋势吗？只能是区间震荡吧，如果出现上涨或下跌的次级别波段，那必然也分形之间也是重叠的，因此也只能是次级别走势
+        # 2. 以顶底分形为准，对连续次级别构建HH/HL/LL/LH波段结构，判断波段方向是上涨、下跌还是横盘区间，然后对分形进行级别划定
+        # 2.1 如果由次级别组成的波段，形成了一段上涨一段下跌的结构，则把端点调整为本级别
+        # 2.2 如果次级别组成的波段，形成了横盘区间，把区间的最低点（若未来价格离开区间向上）或最高点（若未来离开向下）调整为本级别
+        # ----------以下是核心-------------
+        # 带着疑问，我分析应该如下判断：
+        # 2. 获取两个本级别的高低点，判断其中的次级别是否有能力替换本级别的高低点成为新的高低点
+        """
+        # 取最新的一段数据进行处理，久远的数据级别已经固定，不用处理
+        df_fractals = self.df_cbar.tail(
+            Const.LOOKBACK_LIMIT
+            if self.df_cbar.height > Const.LOOKBACK_LIMIT
+            else self.df_cbar.height
+        ).filter(pl.col("swing_point_type") != SwingPointType.NONE)
+
+        secondary_fractal_list = []
+        prev_primary_fractal = None
+        secondary_high = None  # 一段连续次级别中最高的顶分形
+        secondary_low = None  # 一段连续次级别中最低的底分形
+        changed_cbar_list = []  # 需要调整级别的顶底分形列表
+        # 从新数据往旧数据遍历
+        for i in range(df_fractals.height - 1, -1, -1):
+            curr_cbar = CBar(**df_fractals.row(i, named=True))
+            if curr_cbar.swing_point_level == SwingPointLevel.MINOR:
+                # 次级别开始，记录连续次级别，并判断波段区间的高低点
+                secondary_fractal_list.append(curr_cbar)
+
+                if curr_cbar.swing_point_type == SwingPointType.HIGH:
+                    if secondary_high is None:
+                        secondary_high = curr_cbar
+                    elif secondary_high.high_price < curr_cbar.high_price:
+                        secondary_high = curr_cbar
+                else:
+                    if secondary_low is None:
+                        secondary_low = curr_cbar
+                    elif secondary_low.low_price > curr_cbar.low_price:
+                        secondary_low = curr_cbar
+
+            elif curr_cbar.swing_point_level == SwingPointLevel.MAJOR:
+                # 本级别开始
+                # 判断次级别趋势，调整级别，清空次级别列表重新记录
+                if secondary_high:  # 说明两个本级别之间存在次级别
+                    if (
+                        secondary_high is None or secondary_low is None
+                    ):  # 说明两个本级别之间只有一个次级别
+                        # 疑问：实盘中什么情况下会出现？好像不可能，如果两个本级别之间只有一个次级别，那次级别是怎么确认的？
+                        pass
+                    else:  # 有多个次级别
+                        if prev_primary_fractal is None:
+                            # 本级别尚未走完
+                            pass
+                        else:  # 次级别是在两个本级别中间
+                            if (
+                                prev_primary_fractal.swing_point_type
+                                == curr_cbar.swing_point_type
+                            ):
+                                # 两个本级别同方向，需要次级别的波动高低点相连
+                                if curr_cbar.swing_point_type == SwingPointType.HIGH:
+                                    # 本级别顶分形，需要找次级别的最小底分形相连
+                                    secondary_low.swing_point_level = (
+                                        SwingPointLevel.MAJOR
+                                    )
+                                    # 更新数据源
+                                    changed_cbar_list.append(secondary_low)
+                                else:
+                                    # 找次级别顶分形相连
+                                    secondary_high.swing_point_level = (
+                                        SwingPointLevel.MAJOR
+                                    )
+                                    # 更新数据源
+                                    changed_cbar_list.append(secondary_high)
+                            else:
+                                # 两个本级别反向，正好顶底相连，需要判断是否需要调整高低点边线
+                                if curr_cbar.swing_point_type == SwingPointType.HIGH:
+                                    # 本级别顶分形，判断当前分形的高点是否比次级别最高分形大
+                                    if curr_cbar.high_price < secondary_high.high_price:
+                                        # 更改端点
+                                        curr_cbar.swing_point_level = (
+                                            SwingPointLevel.MINOR
+                                        )
+                                        secondary_high.swing_point_level = (
+                                            SwingPointLevel.MAJOR
+                                        )
+                                        # 更新数据源
+                                        changed_cbar_list.append(secondary_high)
+                                        changed_cbar_list.append(curr_cbar)
+                                else:
+                                    # 本级别底分形，判断当前分形的低点是否比次级别最低分形小
+                                    if curr_cbar.low_price > secondary_low.low_price:
+                                        # 更改端点
+                                        curr_cbar.swing_point_level = (
+                                            SwingPointLevel.MINOR
+                                        )
+                                        secondary_low.swing_point_level = (
+                                            SwingPointLevel.MAJOR
+                                        )
+                                        # 更新数据源
+                                        changed_cbar_list.append(secondary_low)
+                                        changed_cbar_list.append(curr_cbar)
+                else:  # 没有次级别
+                    pass
+
+                secondary_fractal_list.clear()
+
+                prev_primary_fractal = curr_cbar
+
+        if changed_cbar_list:
+            self.update_swing_point_level(changed_cbar_list)
+
+    def _process_consecutive_same_fractals(self):
+        """
+        处理本级别连续同向分形，比如连续多个顶分形，调整最后一个为本级别，其他为次级别
+        """
+        # 取最新的一段数据进行处理，久远的数据级别已经固定，不用处理
+        df_major_fractals = self.df_cbar.tail(
+            Const.LOOKBACK_LIMIT
+            if self.df_cbar.height > Const.LOOKBACK_LIMIT
+            else self.df_cbar.height
+        ).filter(
+            (pl.col("swing_point_type") != SwingPointType.NONE)
+            & (pl.col("swing_point_level") == SwingPointLevel.MAJOR)
+        )
+
+        prev_cbar = None
+        downlevel_cbar_list = []  # 需要降级的分形列表
+        # 从新数据往旧数据遍历
+        for i in range(df_major_fractals.height - 1, -1, -1):
+            curr_cbar = CBar(**df_major_fractals.row(i, named=True))
+            if prev_cbar is None:
+                prev_cbar = curr_cbar
+                continue
+            if curr_cbar.swing_point_type == prev_cbar.swing_point_type:
+                # 两分形同向，保留最新的一个，其他都降级
+                curr_cbar.swing_point_level = SwingPointLevel.MINOR
+                downlevel_cbar_list.append(curr_cbar)
+            else:
+                # 顶底/底顶相连，不用处理
+                pass
+            prev_cbar = curr_cbar
+
+        self.update_swing_point_level(downlevel_cbar_list)
+
+    def _validate(self):
+        """
+        验证处理结果是否正确，结果必须是本级别高低点交错出现
+        """
+        return True

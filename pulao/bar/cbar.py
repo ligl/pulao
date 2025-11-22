@@ -58,5 +58,4 @@ class Fractal:
             return False
         low1, high1 = self.range()
         low2, high2 = other.range()
-        return max(low1, low2) <= min(high1,high2)
-
+        return max(low1, low2) <= min(high1, high2)
