@@ -6,7 +6,7 @@ from typing import Any, Dict, List
 import polars as pl
 
 from .atr import AtrIndicator
-from pulao.sbar import SBar
+from pulao.bar import SBar
 
 # -----------------------------
 # IndicatorManager: manage multiple indicators per symbol

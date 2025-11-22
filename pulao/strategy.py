@@ -6,7 +6,7 @@ from vnpy.trader.utility import BarGenerator
 from vnpy_ctastrategy import CtaTemplate
 
 from pulao.object import BaseDecorator
-from pulao.sbar import SBarManager, SBar
+from pulao.bar import SBarManager, SBar
 
 @BaseDecorator()
 class PulaoStrategy(CtaTemplate):

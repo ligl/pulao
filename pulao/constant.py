@@ -54,7 +54,7 @@ class SwingPointLevel(BaseEnum):
     波段高低点级别
     """
 
-    HIGHER_TIMEFRAME = 3
+    # HIGHER_TIMEFRAME = 3
     CURRENT_TIMEFRAME = 2
     LOWER_TIMEFRAME = 1
     NONE = 0
@@ -132,6 +132,7 @@ class EventType(BaseEnum):
     Event事件类型
     """
 
-    SBAR_CREATED = "sbar.created"
+    SBAR_CREATED = "bar.created"
+    CBAR_CREATED = "cbar.created"
     SWING_CHANGED = "swing.changed"
     TREND_CHANGED = "trend.changed"

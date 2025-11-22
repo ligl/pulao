@@ -30,6 +30,7 @@ class SBar:
 
     swing_point_type: SwingPointType = SwingPointType.NONE
     swing_point_level: SwingPointLevel = SwingPointLevel.NONE
+    swing_point_level_origin: SwingPointLevel = SwingPointLevel.NONE
 
     ema_short: float = 0
     ema_long: float = 0
@@ -52,6 +53,7 @@ class SBar:
 
         self.swing_point_type = SwingPointType.NONE
         self.swing_point_level = SwingPointLevel.NONE
+        self.swing_point_level_origin = SwingPointLevel.NONE
 
         self.ema_short = 0
         self.ema_long = 0

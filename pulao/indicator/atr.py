@@ -1,7 +1,7 @@
 from typing import Optional, List
 
 from .indicator_base import BaseIndicator
-from pulao.sbar import SBar
+from pulao.bar import SBar
 
 
 # -----------------------------
