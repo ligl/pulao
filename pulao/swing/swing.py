@@ -1,8 +1,9 @@
-from pulao.constant import SwingDirection, SwingPointType
-from pulao.object import BaseDecorator
+from dataclasses import dataclass
+
+from pulao.constant import SwingDirection
 
 
-@BaseDecorator()
+@dataclass
 class Swing:
     index: int = 0
     direction: SwingDirection = SwingDirection.NONE  # "up" / "down"

@@ -48,7 +48,7 @@ class SwingManager(Observable):
                 self.cbar_manager.df_cbar.slice(start_index, Const.LOOKBACK_LIMIT)
                 .filter(
                     (pl.col("swing_point_type") == end_swing_point_type)
-                    & (pl.col("swing_point_level") == SwingPointLevel.CURRENT_TIMEFRAME)
+                    & (pl.col("swing_point_level") == SwingPointLevel.MAJOR)
                 )
                 .select(pl.col("index").last())
                 .item()
@@ -86,7 +86,7 @@ class SwingManager(Observable):
             )
             .filter(
                 (pl.col("swing_point_type") == prev_opposite_swing_point_type)
-                & (pl.col("swing_point_level") == SwingPointLevel.CURRENT_TIMEFRAME)
+                & (pl.col("swing_point_level") == SwingPointLevel.MAJOR)
             )
             .select(pl.col("index").last())
             .item()
@@ -125,7 +125,7 @@ class SwingManager(Observable):
             self.cbar_manager.df_cbar.slice(slice_index, prev_same_swing_end_index - slice_index + 1)
             .filter(
                 (pl.col("swing_point_type") == prev_same_swing_point_type)
-                & (pl.col("swing_point_level") == SwingPointLevel.CURRENT_TIMEFRAME)
+                & (pl.col("swing_point_level") == SwingPointLevel.MAJOR)
             )
             .select(pl.col("index").last())
             .item()
@@ -180,7 +180,7 @@ class SwingManager(Observable):
         """
         return self.cbar_manager.df_cbar.slice(start_index, end_index - start_index + 1).filter(
             (pl.col("swing_point_type") != SwingPointType.NONE)
-            & (pl.col("swing_point_level") == SwingPointLevel.CURRENT_TIMEFRAME)
+            & (pl.col("swing_point_level") == SwingPointLevel.MAJOR)
         )
 
     def get_bar_list(self, start_index: int, end_index: int, origin_bar=False):
@@ -202,7 +202,7 @@ class SwingManager(Observable):
         start_index = (
             self.cbar_manager.df_cbar.filter(
                 (pl.col("swing_point_type") != SwingPointType.NONE)
-                & (pl.col("swing_point_level") == SwingPointLevel.CURRENT_TIMEFRAME)
+                & (pl.col("swing_point_level") == SwingPointLevel.MAJOR)
             )
             .select(pl.col("index").last())
             .item()

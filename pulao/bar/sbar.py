@@ -1,13 +1,10 @@
+from dataclasses import dataclass
+
 from pulao.constant import SwingPointType, SwingPointLevel
 
 from datetime import datetime as Datetime
 
-from vnpy.trader.object import BarData
-
-from pulao.object import BaseDecorator
-
-
-@BaseDecorator()
+@dataclass
 class SBar:
     """
     SuperBar , BarData扩展
@@ -15,11 +12,11 @@ class SBar:
 
     index: int = 0  # 在SBarManager数据源中的索引，类似数据库中的自增id
 
-    symbol: str
-    exchange: str
-    interval: str
+    symbol: str = None
+    exchange: str = None
+    interval: str = None
 
-    datetime: Datetime
+    datetime: Datetime = None
     volume: float = 0
     turnover: float = 0
     open_interest: float = 0
@@ -34,33 +31,6 @@ class SBar:
 
     ema_short: float = 0
     ema_long: float = 0
-
-    def __init__(self, bar: BarData = None, **kwargs):
-        super().__init__()
-        # 如果传入的是 BarData 对象 → 自动解析
-        if bar is not None:
-            self.symbol = bar.symbol
-            self.exchange = bar.exchange.value
-            self.datetime = bar.datetime
-            self.interval = bar.interval.value if bar.interval else ""
-            self.volume = bar.volume
-            self.turnover = bar.turnover
-            self.open_interest = bar.open_interest
-            self.open_price = bar.open_price
-            self.high_price = bar.high_price
-            self.low_price = bar.low_price
-            self.close_price = bar.close_price
-
-        self.swing_point_type = SwingPointType.NONE
-        self.swing_point_level = SwingPointLevel.NONE
-        self.swing_point_level_origin = SwingPointLevel.NONE
-
-        self.ema_short = 0
-        self.ema_long = 0
-
-        # 然后解析 **kwargs（覆盖 BarData 的同名字段）
-        for k, v in kwargs.items():
-            setattr(self, k, v)
 
     @property
     def body(self) -> float:

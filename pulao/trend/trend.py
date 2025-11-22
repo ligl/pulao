@@ -1,8 +1,9 @@
+from dataclasses import dataclass
+
 from pulao.constant import TrendDirection
-from pulao.object import BaseDecorator
 
 
-@BaseDecorator()
+@dataclass
 class Trend:
     direction: TrendDirection = TrendDirection.NONE  # up / down / range
     start_index: int = 0 # cbar_df

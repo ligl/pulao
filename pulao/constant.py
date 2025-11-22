@@ -31,6 +31,9 @@ class BaseEnum(Enum):
         # 明确返回不等于 __eq__ 的否定
         return not self.__eq__(other)
 
+    def __hash__(self):
+        return super().__hash__()
+
     @classmethod
     def parse(cls, value: str):
         for member in cls:
@@ -54,10 +57,9 @@ class SwingPointLevel(BaseEnum):
     波段高低点级别
     """
 
-    # HIGHER_TIMEFRAME = 3
-    CURRENT_TIMEFRAME = 2
-    LOWER_TIMEFRAME = 1
-    NONE = 0
+    MAJOR = 2 # 本周期主要级别
+    MINOR = 1 # 本周期次要级别
+    NONE = 0 # 不是波段点
 
 
 class SwingDirection(BaseEnum):
