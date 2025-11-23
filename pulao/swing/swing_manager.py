@@ -13,9 +13,9 @@ class SwingManager(Observable):
     def __init__(self, cbar_manager: CBarManager):
         super().__init__()
         self.cbar_manager = cbar_manager
-        self.cbar_manager.subscribe(self._on_sbar_created)
+        self.cbar_manager.subscribe(self._on_cbar_created)
 
-    def _on_sbar_created(self, event: EventType, payload: Any):
+    def _on_cbar_created(self, event: EventType, payload: Any):
         self.detect()
 
     def detect(self):

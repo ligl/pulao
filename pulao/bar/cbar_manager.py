@@ -61,88 +61,100 @@ class CBarManager(Observable):
         low_price = 0
         start_index = 0
         end_index = 0
-        is_bar_containment = False  # 是否有包含关系
+        is_container = False  # 是否有包含关系
+        direction = None
         if last_cbar_df.height == 2:  # 已有构造数据列表
-            row_direction = last_cbar_df.row(0, named=True)
-            row_compare = last_cbar_df.row(1, named=True)
+            direction_bar = CBar(**last_cbar_df.row(0, named=True))
+            compare_bar = CBar(**last_cbar_df.row(1, named=True))
 
-            if row_compare["high_price"] > row_direction["high_price"]:  # 向上
+            if compare_bar.high_price > direction_bar.high_price:  # 向上
                 direction = SwingDirection.UP
-            elif row_compare["low_price"] < row_direction["low_price"]:  # 向下
+            elif compare_bar.low_price < direction_bar.low_price:  # 向下
                 direction = SwingDirection.DOWN
             else:
                 # 不应该执行此处代码，如果执行，说明之前的数据有问题！！！
+                print(compare_bar,direction_bar,sbar)
                 raise AssertionError(
                     f"K线合并错误，出现了不应出现的情况 in {self.__class__.__name__}"
                 )
+
             if (
-                row_compare["high_price"] >= sbar.high_price
-                and row_compare["low_price"] <= sbar.low_price
-            ):  # 内包，即row_compare包含sbar
-                is_bar_containment = True
-                start_index = row_compare["start_index"]
+                compare_bar.high_price >= sbar.high_price
+                and compare_bar.low_price <= sbar.low_price
+            ) or (
+                compare_bar.high_price <= sbar.high_price
+                and compare_bar.low_price >= sbar.low_price
+            ):  # 有包含
+                is_container = True
+                start_index = compare_bar.start_index
                 end_index = sbar.index
+
                 if direction == SwingDirection.UP:
                     # 方向向上，取高中高、低中高
-                    high_price = row_compare["high_price"]
-                    low_price = sbar.low_price
+                    high_price = max(sbar.high_price,compare_bar.high_price)
+                    low_price = max(sbar.low_price, compare_bar.low_price)
                 else:
                     # 方向向下，取高中低、低中低
-                    high_price = sbar.high_price
-                    low_price = row_compare["low_price"]
-            elif (
-                row_compare["high_price"] <= sbar.high_price
-                and row_compare["low_price"] >= sbar.low_price
-            ):  # 外包，即sbar包含row_compare
-                is_bar_containment = True
-                start_index = row_compare["start_index"]
-                end_index = sbar.index
-                if direction == SwingDirection.UP:
-                    # 方向向上，取高中高、低中高
-                    high_price = sbar.high_price
-                    low_price = row_compare["low_price"]
-                else:
-                    # 方向向下，取高中低、低中低
-                    high_price = row_compare["high_price"]
-                    low_price = sbar.low_price
+                    high_price = min(sbar.high_price,compare_bar.high_price)
+                    low_price = min(sbar.low_price,compare_bar.low_price)
 
         elif last_cbar_df.height == 1:  # sbar为第2根
             # 丢弃被包含的bar
-            row_compare = last_cbar_df.row(0, named=True)
+            compare_bar = CBar(**last_cbar_df.row(0, named=True))
             if (
-                row_compare["high_price"] >= sbar.high_price
-                and row_compare["low_price"] <= sbar.low_price
-            ):  # 内包，即row_compare包含sbar
-                is_bar_containment = True
-                high_price = row_compare["high_price"]
-                low_price = row_compare["low_price"]
-                start_index = row_compare["start_index"]
+                compare_bar.high_price >= sbar.high_price
+                and compare_bar.low_price <= sbar.low_price
+            ) or (
+                compare_bar.high_price <= sbar.high_price
+                and compare_bar.low_price >= sbar.low_price
+            ):  # 有包含
+                is_container = True
+                start_index = compare_bar.start_index
                 end_index = sbar.index
-            elif (
-                row_compare["high_price"] <= sbar.high_price
-                and row_compare["low_price"] >= sbar.low_price
-            ):  # 外包，即sbar包含row_compare
-                is_bar_containment = True
-                high_price = sbar.high_price
-                low_price = sbar.low_price
-                start_index = row_compare["start_index"]
-                end_index = sbar.index
-            else:  # 没有包含关系
-                pass
+
+                high_price = max(sbar.high_price, compare_bar.high_price)
+                low_price = min(sbar.low_price, compare_bar.low_price)
+
         else:  # 尚未构造数据，sbar为第1根
-            row_compare = None
             pass
 
-        if not is_bar_containment:  # 没有包含关系
+        if not is_container:  # 没有包含关系
             high_price = sbar.high_price
             low_price = sbar.low_price
             start_index = sbar.index
             end_index = sbar.index
         else:  # 有包含关系，
-            # 1. 把row_compare删除
-            self.df_cbar = self.df_cbar.filter(pl.col("index") != row_compare["index"])
-        # 2. 增加cbar
-        row = {
+            # 1. 把row_compare删除，即最后一条
+            self.df_cbar = self.df_cbar.slice(0,self.df_cbar.height - 1)
+
+        # 2. 判断要插入的bar是否与已经存在的bar有包含关系
+        last_cbar = self.df_cbar.tail(1)
+        last_cbar = CBar(**last_cbar.row(0, named=True)) if last_cbar.height != 0 else None
+        if last_cbar:
+            if (
+                last_cbar.high_price >= high_price
+                and last_cbar.low_price <= low_price
+            ) or (
+                last_cbar.high_price <= high_price
+                and last_cbar.low_price >= low_price
+            ):  # 有包含
+                start_index = last_cbar.start_index
+                if direction == SwingDirection.UP:
+                    # 方向向上，取高中高、低中高
+                    high_price = max(last_cbar.high_price, high_price)
+                    low_price = max(last_cbar.low_price, low_price)
+                elif direction == SwingDirection.DOWN:
+                    # 方向向下，取高中低、低中低
+                    high_price = min(last_cbar.high_price,high_price)
+                    low_price = min(last_cbar.low_price, low_price)
+                else:
+                    high_price = max(last_cbar.high_price, high_price)
+                    low_price = min(last_cbar.low_price, low_price)
+
+                self.df_cbar = self.df_cbar.slice(0, self.df_cbar.height - 1)
+
+        # 3. 增加cbar
+        new_cbar = {
             "index": self.df_cbar.height,
             "start_index": start_index,
             "end_index": end_index,
@@ -154,7 +166,7 @@ class CBarManager(Observable):
         }
         self.df_cbar = self.df_cbar.vstack(
             pl.DataFrame(
-                [[row[col] for col in self.df_cbar.columns]],
+                [[new_cbar[col] for col in self.df_cbar.columns]],
                 schema=self.df_cbar.schema,
                 orient="row",
             )
@@ -284,69 +296,10 @@ class CBarManager(Observable):
         # 依次执行处理函数
         while True:
             self._process_fractal_overlap()
-            # self._process_consecutive_same_fractals()
+            self._process_consecutive_same_fractals()
             # self._process_secondary_swing()
             if self._validate():
                 break
-
-
-    def update_swing_point_level(self, cbar_list: List[CBar]):
-        """
-        更新分形中对应bar的波段高低点级别
-        """
-        if not cbar_list:
-            return
-        expr_sbar = pl.col("swing_point_level")
-        expr_cbar = pl.col("swing_point_level")
-        for cbar in cbar_list:
-            sbar_df = self.sbar_manager.get_range_index(
-                cbar.start_index,
-                cbar.end_index,
-            )
-            # 顶分形取最高价的bar，低分形取最低价的bar
-            if cbar.swing_point_type == SwingPointType.LOW:
-                bar_index = (
-                    sbar_df.filter(pl.col("low_price") == pl.col("low_price").min())
-                    .select("index")
-                    .item()
-                )
-            elif cbar.swing_point_type == SwingPointType.HIGH:
-                bar_index = (
-                    sbar_df.filter(pl.col("high_price") == pl.col("high_price").max())
-                    .select("index")
-                    .item()
-                )
-            else:  # 不应该执行这里
-                raise AssertionError("波段类型参数不对")
-
-            expr_sbar = (
-                pl.when(pl.col("index") == bar_index)
-                .then(pl.lit(cbar.swing_point_level))
-                .otherwise(expr_sbar)
-            )
-            expr_cbar = (
-                pl.when(pl.col("index") == cbar.index)
-                .then(pl.lit(cbar.swing_point_level))
-                .otherwise(expr_cbar)
-            )
-            # 1. 更新数据源-sbar_df
-            self.sbar_manager.update(expr_sbar.alias("swing_point_level"))
-            # 2. 更新数据源-cbar_df
-            self.df_cbar = self.df_cbar.with_columns(
-                expr_cbar.alias("swing_point_level")
-            )
-
-    def get_fractal(self, index: int) -> Fractal | None:
-        start_index = index - 1
-        end_index = index + 1
-        rows = self.df_cbar.slice(start_index, end_index - start_index + 1).rows(
-            named=True
-        )
-        if len(rows) != 3:
-            return None
-        return Fractal(
-            left=CBar(**rows[0]), middle=CBar(**rows[1]), right=CBar(**rows[2])
-        )
 
     def _process_fractal_overlap(self):
         """
@@ -413,13 +366,9 @@ class CBarManager(Observable):
 
     def _process_secondary_swing(self):
         """
-        # 疑问：次级别会有上涨或下跌趋势吗？只能是区间震荡吧，如果出现上涨或下跌的次级别波段，那必然也分形之间也是重叠的，因此也只能是次级别走势
-        # 2. 以顶底分形为准，对连续次级别构建HH/HL/LL/LH波段结构，判断波段方向是上涨、下跌还是横盘区间，然后对分形进行级别划定
+        # 2. 以次级别顶底分形为准，对连续次级别构建HH/HL/LL/LH波段结构，判断波段方向是上涨、下跌还是横盘区间，然后对分形进行级别升降
         # 2.1 如果由次级别组成的波段，形成了一段上涨一段下跌的结构，则把端点调整为本级别
-        # 2.2 如果次级别组成的波段，形成了横盘区间，把区间的最低点（若未来价格离开区间向上）或最高点（若未来离开向下）调整为本级别
-        # ----------以下是核心-------------
-        # 带着疑问，我分析应该如下判断：
-        # 2. 获取两个本级别的高低点，判断其中的次级别是否有能力替换本级别的高低点成为新的高低点
+        # 2.2 如果次级别组成的波段，形成了横盘区间，把区间的最低点（若未来价格离开区间向上）或最高点（若未来离开向下）调整为本级别 [这里是不是不用考虑盘整区间了?]
         """
         # 取最新的一段数据进行处理，久远的数据级别已经固定，不用处理
         df_fractals = self.df_cbar.tail(
@@ -432,7 +381,7 @@ class CBarManager(Observable):
         prev_primary_fractal = None
         secondary_high = None  # 一段连续次级别中最高的顶分形
         secondary_low = None  # 一段连续次级别中最低的底分形
-        changed_cbar_list = []  # 需要调整级别的顶底分形列表
+        level_changed_cbar_list = []  # 需要调整级别的顶底分形列表
         # 从新数据往旧数据遍历
         for i in range(df_fractals.height - 1, -1, -1):
             curr_cbar = CBar(**df_fractals.row(i, named=True))
@@ -476,14 +425,14 @@ class CBarManager(Observable):
                                         SwingPointLevel.MAJOR
                                     )
                                     # 更新数据源
-                                    changed_cbar_list.append(secondary_low)
+                                    level_changed_cbar_list.append(secondary_low)
                                 else:
                                     # 找次级别顶分形相连
                                     secondary_high.swing_point_level = (
                                         SwingPointLevel.MAJOR
                                     )
                                     # 更新数据源
-                                    changed_cbar_list.append(secondary_high)
+                                    level_changed_cbar_list.append(secondary_high)
                             else:
                                 # 两个本级别反向，正好顶底相连，需要判断是否需要调整高低点边线
                                 if curr_cbar.swing_point_type == SwingPointType.HIGH:
@@ -497,8 +446,8 @@ class CBarManager(Observable):
                                             SwingPointLevel.MAJOR
                                         )
                                         # 更新数据源
-                                        changed_cbar_list.append(secondary_high)
-                                        changed_cbar_list.append(curr_cbar)
+                                        level_changed_cbar_list.append(secondary_high)
+                                        level_changed_cbar_list.append(curr_cbar)
                                 else:
                                     # 本级别底分形，判断当前分形的低点是否比次级别最低分形小
                                     if curr_cbar.low_price > secondary_low.low_price:
@@ -510,8 +459,8 @@ class CBarManager(Observable):
                                             SwingPointLevel.MAJOR
                                         )
                                         # 更新数据源
-                                        changed_cbar_list.append(secondary_low)
-                                        changed_cbar_list.append(curr_cbar)
+                                        level_changed_cbar_list.append(secondary_low)
+                                        level_changed_cbar_list.append(curr_cbar)
                 else:  # 没有次级别
                     pass
 
@@ -519,44 +468,163 @@ class CBarManager(Observable):
 
                 prev_primary_fractal = curr_cbar
 
-        if changed_cbar_list:
-            self.update_swing_point_level(changed_cbar_list)
+        if level_changed_cbar_list:
+            self.update_swing_point_level(level_changed_cbar_list)
 
     def _process_consecutive_same_fractals(self):
         """
-        处理本级别连续同向分形，比如连续多个顶分形，调整最后一个为本级别，其他为次级别
+        处理本级别连续同向分形，保留最近一个，其他降为次级别
         """
-        # 取最新的一段数据进行处理，久远的数据级别已经固定，不用处理
-        df_major_fractals = self.df_cbar.tail(
-            Const.LOOKBACK_LIMIT
-            if self.df_cbar.height > Const.LOOKBACK_LIMIT
-            else self.df_cbar.height
-        ).filter(
-            (pl.col("swing_point_type") != SwingPointType.NONE)
-            & (pl.col("swing_point_level") == SwingPointLevel.MAJOR)
-        )
 
-        prev_cbar = None
-        downlevel_cbar_list = []  # 需要降级的分形列表
-        # 从新数据往旧数据遍历
-        for i in range(df_major_fractals.height - 1, -1, -1):
-            curr_cbar = CBar(**df_major_fractals.row(i, named=True))
-            if prev_cbar is None:
+        def first():
+            # 取最新的一段数据进行处理，久远的数据级别已经固定，不用处理
+            df_major_fractals = self.df_cbar.tail(
+                Const.LOOKBACK_LIMIT
+                if self.df_cbar.height > Const.LOOKBACK_LIMIT
+                else self.df_cbar.height
+            ).filter(
+                (pl.col("swing_point_type") != SwingPointType.NONE)
+                & (pl.col("swing_point_level") == SwingPointLevel.MAJOR)
+            )
+
+            prev_cbar = None
+            changed_cbar_list = []  # 需要升降级的波段点列表
+            # 从新数据往旧数据遍历
+            for i in range(df_major_fractals.height - 1, -1, -1):
+                curr_cbar = CBar(**df_major_fractals.row(i, named=True))
+                if prev_cbar is None:
+                    prev_cbar = curr_cbar
+                    continue
+                if curr_cbar.swing_point_type == prev_cbar.swing_point_type:
+                    # 两分形同向，保留最新的一个，其他都降级
+                    curr_cbar.swing_point_level = SwingPointLevel.MINOR
+                    changed_cbar_list.append(curr_cbar)
+                else:
+                    # 顶底/底顶相连，不用处理
+                    pass
                 prev_cbar = curr_cbar
-                continue
-            if curr_cbar.swing_point_type == prev_cbar.swing_point_type:
-                # 两分形同向，保留最新的一个，其他都降级
-                curr_cbar.swing_point_level = SwingPointLevel.MINOR
-                downlevel_cbar_list.append(curr_cbar)
-            else:
-                # 顶底/底顶相连，不用处理
-                pass
-            prev_cbar = curr_cbar
 
-        self.update_swing_point_level(downlevel_cbar_list)
+            self.update_swing_point_level(changed_cbar_list)
+
+        def second():
+            # 检查本级别顶底分形之间是否有越过其边界的次级别分形，如果有把那个次级别升级，对应分形的本级别降级
+            df_major_fractals = self.df_cbar.tail(
+                Const.LOOKBACK_LIMIT
+                if self.df_cbar.height > Const.LOOKBACK_LIMIT
+                else self.df_cbar.height
+            ).filter(
+                (pl.col("swing_point_type") != SwingPointType.NONE)
+                & (pl.col("swing_point_level") == SwingPointLevel.MAJOR)
+            )
+            prev_cbar = None
+            level_changed_bars = []  # 需要降级的分形列表
+            # 从新数据往旧数据遍历
+            for i in range(df_major_fractals.height - 1, -1, -1):
+                curr_cbar = CBar(**df_major_fractals.row(i, named=True))
+                if prev_cbar is None:
+                    prev_cbar = curr_cbar
+                    continue
+                if curr_cbar.swing_point_type != prev_cbar.swing_point_type:  # 一顶一底
+                    # 找顶底分形中的次级别bar
+                    tmp_df = self.df_cbar.slice(
+                        curr_cbar.index, prev_cbar.index + 1
+                    ).filter(
+                        (pl.col("swing_point_type") != SwingPointType.NONE)
+                        & (pl.col("swing_point_level") == SwingPointLevel.MINOR)
+                    )
+                    if curr_cbar.swing_point_type == SwingPointType.HIGH:
+                        tmp_df = tmp_df.filter(
+                            (pl.col("high_price") == pl.col("high_price").max())
+                            & (pl.col("swing_point_type") == SwingPointType.HIGH)
+                        )
+                        if tmp_df.height > 0:  # 有次级别波段点
+                            secondary_cbar = CBar(**tmp_df.row(0, named=True))
+                            if curr_cbar.high_price < secondary_cbar.high_price:
+                                secondary_cbar.swing_point_level = SwingPointLevel.MAJOR
+                                level_changed_bars.append(secondary_cbar)
+                                curr_cbar.swing_point_level = SwingPointLevel.MINOR
+                                level_changed_bars.append(curr_cbar)
+                    else:
+                        tmp_df = tmp_df.filter(
+                            (pl.col("low_price") == pl.col("low_price").min())
+                            & (pl.col("swing_point_type") == SwingPointType.LOW)
+                        )
+                        if tmp_df.height > 0:  # 有次级别波段点
+                            secondary_cbar = CBar(**tmp_df.row(0, named=True))
+                            if curr_cbar.low_price > secondary_cbar.low_price:
+                                secondary_cbar.swing_point_level = SwingPointLevel.MAJOR
+                                level_changed_bars.append(secondary_cbar)
+                                curr_cbar.swing_point_level = SwingPointLevel.MINOR
+                                level_changed_bars.append(curr_cbar)
+
+                prev_cbar = curr_cbar
+
+            self.update_swing_point_level(level_changed_bars)
+
+        # 执行
+        first()
+        second()
 
     def _validate(self):
         """
         验证处理结果是否正确，结果必须是本级别高低点交错出现
         """
         return True
+
+    def update_swing_point_level(self, cbar_list: List[CBar]):
+        """
+        更新分形中对应bar的波段高低点级别
+        """
+        if not cbar_list:
+            return
+        expr_sbar = pl.col("swing_point_level")
+        expr_cbar = pl.col("swing_point_level")
+        for cbar in cbar_list:
+            sbar_df = self.sbar_manager.get_range_index(
+                cbar.start_index,
+                cbar.end_index,
+            )
+            # 顶分形取最高价的bar，低分形取最低价的bar
+            if cbar.swing_point_type == SwingPointType.LOW:
+                bar_index = (
+                    sbar_df.filter(pl.col("low_price") == pl.col("low_price").min())
+                    .select("index")
+                    .item()
+                )
+            elif cbar.swing_point_type == SwingPointType.HIGH:
+                bar_index = (
+                    sbar_df.filter(pl.col("high_price") == pl.col("high_price").max())
+                    .select("index")
+                    .item()
+                )
+            else:  # 不应该执行这里
+                raise AssertionError("波段类型参数不对")
+
+            expr_sbar = (
+                pl.when(pl.col("index") == bar_index)
+                .then(pl.lit(cbar.swing_point_level))
+                .otherwise(expr_sbar)
+            )
+            expr_cbar = (
+                pl.when(pl.col("index") == cbar.index)
+                .then(pl.lit(cbar.swing_point_level))
+                .otherwise(expr_cbar)
+            )
+            # 1. 更新数据源-sbar_df
+            self.sbar_manager.update(expr_sbar.alias("swing_point_level"))
+            # 2. 更新数据源-cbar_df
+            self.df_cbar = self.df_cbar.with_columns(
+                expr_cbar.alias("swing_point_level")
+            )
+
+    def get_fractal(self, index: int) -> Fractal | None:
+        start_index = index - 1
+        end_index = index + 1
+        rows = self.df_cbar.slice(start_index, end_index - start_index + 1).rows(
+            named=True
+        )
+        if len(rows) != 3:
+            return None
+        return Fractal(
+            left=CBar(**rows[0]), middle=CBar(**rows[1]), right=CBar(**rows[2])
+        )

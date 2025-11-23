@@ -28,6 +28,13 @@ class CBar:
     def contains(self, price: float) -> bool:
         return self.low_price <= price <= self.high_price
 
+    def is_inclusive(self, other: CBar) -> bool:
+        if self.low_price <= other.low_price  and self.high_price >= other.high_price:
+            return True # 内包
+        if self.low_price >= other.low_price and self.high_price <= other.high_price:
+            return True # 外包
+        return False
+
 
 class Fractal:
     left: CBar
