@@ -48,112 +48,116 @@ class CBarManager(Observable):
         self.notify(EventType.CBAR_CREATED)
 
     def _agg_bar(self, sbar: SBar):
-        #
-        # 对k线进行包含合并处理
-        # 处理完成的k线列表由4种特征的k线组成，即：上升K线组、下降K线组、顶分形和底分形
-        #
-        # 包含合并处理逻辑
-        # last_cbar_df：最新的两条数据
-        # 第1行（倒数第二行）：合并时定方向用的bar
-        # 第2行（最新行）：与sbar做比较，判断是否需要合并
-        last_cbar_df = self.df_cbar.tail(2)
-        high_price = 0
-        low_price = 0
-        start_index = 0
-        end_index = 0
-        is_container = False  # 是否有包含关系
+        """
+        K线包含关系处理（缠论预处理第一步）
+        将原始K线合并为无包含关系的处理后K线序列
+        """
+        # 当前待处理的原始K线
+        curr_high = sbar.high_price
+        curr_low = sbar.low_price
+        curr_idx = sbar.index
+
+        # 用于构建新合并K线的临时变量
+        merged_high = curr_high
+        merged_low = curr_low
+        start_idx = curr_idx
+        end_idx = curr_idx
+
+        # 情况1：df_cbar 为空 → 直接加入第一根
+        if self.df_cbar.is_empty():
+            self._append_cbar(start_idx, end_idx, merged_high, merged_low)
+            return
+
+        # 情况2：已有数据，取最后一根处理后的K线
+        last_cbar_dict = self.df_cbar.tail(1).row(0, named=True)
+        last_cbar = CBar(**last_cbar_dict)
+
+        last_high = last_cbar.high_price
+        last_low = last_cbar.low_price
+
+        # 判断两根K线是否存在包含关系
+        def is_inclusive(a_high, a_low, b_high, b_low):
+            return (a_high >= b_high and a_low <= b_low) or (a_high <= b_high and a_low >= b_low)
+
+        # 判断趋势方向（通过最后一根处理后K线与再往前一根比较）
         direction = None
-        if last_cbar_df.height == 2:  # 已有构造数据列表
-            direction_bar = CBar(**last_cbar_df.row(0, named=True))
-            compare_bar = CBar(**last_cbar_df.row(1, named=True))
-
-            if compare_bar.high_price > direction_bar.high_price:  # 向上
+        if self.df_cbar.height >= 2:
+            prev_dict = self.df_cbar.tail(2).row(0, named=True)
+            prev_cbar = CBar(**prev_dict)
+            if last_high > prev_cbar.high_price:
                 direction = SwingDirection.UP
-            elif compare_bar.low_price < direction_bar.low_price:  # 向下
+            elif last_low < prev_cbar.low_price:
                 direction = SwingDirection.DOWN
+            # else: 第一个合并段，还没有明确方向，后面会处理
+
+        # 如果没有明确方向（只有1根），则按“先高后低”或“先低后高”定方向（常见做法）
+        if direction is None:
+            if curr_high >= curr_low:  # 正常情况
+                if last_high >= last_low:
+                    # 都阳线或十字，按收盘或最高最低定，简单处理：谁高谁定向上
+                    direction = SwingDirection.UP if curr_high >= last_high else SwingDirection.DOWN
+                else:
+                    direction = SwingDirection.UP
             else:
-                # 不应该执行此处代码，如果执行，说明之前的数据有问题！！！
-                print(compare_bar,direction_bar,sbar)
-                raise AssertionError(
-                    f"K线合并错误，出现了不应出现的情况 in {self.__class__.__name__}"
-                )
+                direction = SwingDirection.DOWN
 
-            if (
-                compare_bar.high_price >= sbar.high_price
-                and compare_bar.low_price <= sbar.low_price
-            ) or (
-                compare_bar.high_price <= sbar.high_price
-                and compare_bar.low_price >= sbar.low_price
-            ):  # 有包含
-                is_container = True
-                start_index = compare_bar.start_index
-                end_index = sbar.index
+        # 开始包含处理
+        included = is_inclusive(last_high, last_low, curr_high, curr_low)
+
+        if included:
+            # 有包含关系 → 合并，且按已有趋势方向处理高低点
+            start_idx = last_cbar.start_index
+
+            if direction == SwingDirection.UP:
+                merged_high = max(last_high, curr_high)
+                merged_low = max(last_low, curr_low)  # 向上趋势，低点取较高的
+            else:  # DOWN
+                merged_high = min(last_high, curr_high)  # 向下趋势，高点取较低的
+                merged_low = min(last_low, curr_low)
+
+            # 移除最后一条（因为要被合并替换）
+            self.df_cbar = self.df_cbar.slice(0, self.df_cbar.height - 1)
+
+            # 关键：可能还需要向前继续合并！（你原代码缺失这点）
+            # 例如：1→2（包含）→3（又被1包含），必须一直向前吃
+            while self.df_cbar.height >= 2:
+                # 取新的最后两根
+                new_last = CBar(**self.df_cbar.tail(1).row(0, named=True))
+                prev = CBar(**self.df_cbar.tail(2).row(0, named=True))
 
                 if direction == SwingDirection.UP:
-                    # 方向向上，取高中高、低中高
-                    high_price = max(sbar.high_price,compare_bar.high_price)
-                    low_price = max(sbar.low_price, compare_bar.low_price)
+                    if new_last.high_price <= prev.high_price:
+                        break  # 已经破坏向上趋势，停止向前合并
                 else:
-                    # 方向向下，取高中低、低中低
-                    high_price = min(sbar.high_price,compare_bar.high_price)
-                    low_price = min(sbar.low_price,compare_bar.low_price)
+                    if new_last.low_price >= prev.low_price:
+                        break  # 破坏向下趋势
 
-        elif last_cbar_df.height == 1:  # sbar为第2根
-            # 丢弃被包含的bar
-            compare_bar = CBar(**last_cbar_df.row(0, named=True))
-            if (
-                compare_bar.high_price >= sbar.high_price
-                and compare_bar.low_price <= sbar.low_price
-            ) or (
-                compare_bar.high_price <= sbar.high_price
-                and compare_bar.low_price >= sbar.low_price
-            ):  # 有包含
-                is_container = True
-                start_index = compare_bar.start_index
-                end_index = sbar.index
-
-                high_price = max(sbar.high_price, compare_bar.high_price)
-                low_price = min(sbar.low_price, compare_bar.low_price)
-
-        else:  # 尚未构造数据，sbar为第1根
-            pass
-
-        if not is_container:  # 没有包含关系
-            high_price = sbar.high_price
-            low_price = sbar.low_price
-            start_index = sbar.index
-            end_index = sbar.index
-        else:  # 有包含关系，
-            # 1. 把row_compare删除，即最后一条
-            self.df_cbar = self.df_cbar.slice(0,self.df_cbar.height - 1)
-
-        # 2. 判断要插入的bar是否与已经存在的bar有包含关系
-        last_cbar = self.df_cbar.tail(1)
-        last_cbar = CBar(**last_cbar.row(0, named=True)) if last_cbar.height != 0 else None
-        if last_cbar:
-            if (
-                last_cbar.high_price >= high_price
-                and last_cbar.low_price <= low_price
-            ) or (
-                last_cbar.high_price <= high_price
-                and last_cbar.low_price >= low_price
-            ):  # 有包含
-                start_index = last_cbar.start_index
-                if direction == SwingDirection.UP:
-                    # 方向向上，取高中高、低中高
-                    high_price = max(last_cbar.high_price, high_price)
-                    low_price = max(last_cbar.low_price, low_price)
-                elif direction == SwingDirection.DOWN:
-                    # 方向向下，取高中低、低中低
-                    high_price = min(last_cbar.high_price,high_price)
-                    low_price = min(last_cbar.low_price, low_price)
+                # 检查新last是否还被之前的包含
+                if is_inclusive(prev.high_price, prev.low_price, new_last.high_price,
+                                new_last.low_price):
+                    # 继续合并
+                    start_idx = prev.start_index
+                    if direction == SwingDirection.UP:
+                        merged_high = max(merged_high, prev.high_price)
+                        merged_low = max(merged_low, prev.low_price)
+                    else:
+                        merged_high = min(merged_high, prev.high_price)
+                        merged_low = min(merged_low, prev.low_price)
+                    # 删除倒数第二根（现在成了最后）
+                    self.df_cbar = self.df_cbar.slice(0, self.df_cbar.height - 1)
                 else:
-                    high_price = max(last_cbar.high_price, high_price)
-                    low_price = min(last_cbar.low_price, low_price)
+                    break
+        else:
+            # 无包含关系 → 直接作为新K线加入
+            merged_high = curr_high
+            merged_low = curr_low
+            start_idx = curr_idx
 
-                self.df_cbar = self.df_cbar.slice(0, self.df_cbar.height - 1)
+        # 最终追加合并后的K线
+        self._append_cbar(start_idx, end_idx if not included else curr_idx, merged_high, merged_low)
 
-        # 3. 增加cbar
+    def _append_cbar(self, start_index: int, end_index: int, high_price: float, low_price: float):
+        """封装追加逻辑，避免重复代码"""
         new_cbar = {
             "index": self.df_cbar.height,
             "start_index": start_index,
@@ -165,12 +169,8 @@ class CBarManager(Observable):
             "swing_point_level_origin": SwingPointLevel.NONE.value,
         }
         self.df_cbar = self.df_cbar.vstack(
-            pl.DataFrame(
-                [[new_cbar[col] for col in self.df_cbar.columns]],
-                schema=self.df_cbar.schema,
-                orient="row",
-            )
-        )  # append row
+            pl.DataFrame([new_cbar], schema=self.df_cbar.schema)
+        )
 
     def _detect_swing_point(self):
         # 波段点识别
