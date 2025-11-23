@@ -8,14 +8,6 @@ from pulao.trend import Trend
 
 @BaseDecorator()
 class KeyZone(ABC):
-    start_index: int
-    end_index: int
-    price_low: float
-    price_high: float
-    trend_ref: Optional["Trend"]
-    swings_ref: Optional[List["Swing"]]
-    origin_type: KeyZoneOrigin  # 来源类型，如 'from_swing', 'from_trend', 'from_manual'
-    meta: Dict
 
     def __init__(
         self,

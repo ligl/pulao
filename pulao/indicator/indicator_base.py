@@ -13,10 +13,8 @@ from pulao.bar import SBar
 @BaseDecorator()
 class BaseIndicator:
 
-    name: str
-
     def __init__(self, name: str):
-        self.name = name
+        self.name:str = name
 
     def reset(self) -> None:
         """Reset internal state."""

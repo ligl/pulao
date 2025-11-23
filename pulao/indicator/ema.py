@@ -3,11 +3,6 @@ from typing import Optional, List
 from .indicator_base import BaseIndicator
 from pulao.bar import SBar
 
-
-# -----------------------------
-# EMA indicator
-# -----------------------------
-
 class EmaIndicator(BaseIndicator):
     def __init__(self, period: int):
         super().__init__(name=f"ema_{period}")

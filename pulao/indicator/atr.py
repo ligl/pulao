@@ -4,11 +4,6 @@ from .indicator_base import BaseIndicator
 from pulao.bar import SBar
 
 
-# -----------------------------
-# ATR indicator (Wilder style EMA of TR)
-# -----------------------------
-
-
 class AtrIndicator(BaseIndicator):
     def __init__(self, period: int):
         super().__init__(name=f"atr_{period}")
@@ -42,13 +37,7 @@ class AtrIndicator(BaseIndicator):
             self.value = (self.value * (self.period - 1) + tr) / self.period
         return self.value
 
-    def backfill(
-        self,
-        highs: List[float],
-        lows: List[float],
-        closes: List[float],
-        start_index: int = 0,
-    ) -> List[float]:
+    def backfill(self, highs: List[float],lows: List[float],closes: List[float],start_index: int = 0) -> List[float]:
         # Backfill requires sequences of highs, lows, closes
         vals: List[float] = []
         if start_index == 0:

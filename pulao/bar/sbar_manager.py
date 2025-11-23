@@ -12,9 +12,6 @@ class SBarManager(Observable):
     管理缓存bar数据，计算指标
     """
 
-    df_sbar: pl.DataFrame = None
-    indicator_manager: IndicatorManager
-
     def __init__(self):
         super().__init__()
         schema = {
@@ -32,9 +29,9 @@ class SBarManager(Observable):
             "ema_short": pl.Float32,
             "ema_long": pl.Float32,
         }
-        self.df_sbar = pl.DataFrame(schema=schema)
+        self.df_sbar: pl.DataFrame = pl.DataFrame(schema=schema)
 
-        self.indicator_manager = IndicatorManager()
+        self.indicator_manager: IndicatorManager = IndicatorManager()
         self.indicator_manager.register(EmaIndicator(20))
         self.indicator_manager.register(EmaIndicator(60))
 

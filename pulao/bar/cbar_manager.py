@@ -15,9 +15,6 @@ import polars as pl
 
 
 class CBarManager(Observable):
-    sbar_manager: SBarManager
-    df_cbar: pl.DataFrame  # 包含合并后的k线列表
-
     def __init__(self, sbar_manager: SBarManager):
         super().__init__()
         schema = {
@@ -30,8 +27,8 @@ class CBarManager(Observable):
             "swing_point_level": pl.UInt8,  # 波段高低点级别（调整后的，正式用）
             "swing_point_level_origin": pl.UInt8,  # 波段高低点级别（原始级别）
         }
-        self.df_cbar = pl.DataFrame(schema=schema)
-        self.sbar_manager = sbar_manager
+        self.df_cbar: pl.DataFrame = pl.DataFrame(schema=schema)  # 包含合并后的k线列表
+        self.sbar_manager: SBarManager = sbar_manager
         self.sbar_manager.subscribe(self._on_sbar_created)
 
     def _on_sbar_created(self, event: EventType, sbar: Any):
@@ -74,7 +71,9 @@ class CBarManager(Observable):
 
         # 判断两根K线是否存在包含关系
         def is_inclusive(a_high, a_low, b_high, b_low):
-            return (a_high >= b_high and a_low <= b_low) or (a_high <= b_high and a_low >= b_low)
+            return (a_high >= b_high and a_low <= b_low) or (
+                a_high <= b_high and a_low >= b_low
+            )
 
         # 判断趋势方向（通过最后一根处理后K线与再往前一根比较）
         direction = None
@@ -92,7 +91,11 @@ class CBarManager(Observable):
             if curr_high >= curr_low:  # 正常情况
                 if last_high >= last_low:
                     # 都阳线或十字，按收盘或最高最低定，简单处理：谁高谁定向上
-                    direction = SwingDirection.UP if curr_high >= last_high else SwingDirection.DOWN
+                    direction = (
+                        SwingDirection.UP
+                        if curr_high >= last_high
+                        else SwingDirection.DOWN
+                    )
                 else:
                     direction = SwingDirection.UP
             else:
@@ -130,8 +133,12 @@ class CBarManager(Observable):
                         break  # 破坏向下趋势
 
                 # 检查新last是否还被之前的包含
-                if is_inclusive(prev.high_price, prev.low_price, new_last.high_price,
-                                new_last.low_price):
+                if is_inclusive(
+                    prev.high_price,
+                    prev.low_price,
+                    new_last.high_price,
+                    new_last.low_price,
+                ):
                     # 继续合并
                     start_idx = prev.start_index
                     if direction == SwingDirection.UP:
@@ -153,7 +160,9 @@ class CBarManager(Observable):
         # 最终追加合并后的K线
         self._append_cbar(start_idx, end_idx, merged_high, merged_low)
 
-    def _append_cbar(self, start_index: int, end_index: int, high_price: float, low_price: float):
+    def _append_cbar(
+        self, start_index: int, end_index: int, high_price: float, low_price: float
+    ):
         """封装追加逻辑，避免重复代码"""
         new_cbar = {
             "index": self.df_cbar.height,
@@ -186,7 +195,6 @@ class CBarManager(Observable):
         left_bar = CBar(**last_bar_df.row(0, named=True))
         middle_bar = CBar(**last_bar_df.row(1, named=True))
         right_bar = CBar(**last_bar_df.row(2, named=True))
-
 
         swing_point_type = Fractal.is_fractal(left_bar, middle_bar, right_bar)
 

@@ -11,9 +11,6 @@ from pulao.bar import SBarManager, SBar
 @BaseDecorator()
 class PulaoStrategy(CtaTemplate):
     author = "Pulao"
-    sbar_manager_trend: SBarManager = None
-    sbar_manager_swing : SBarManager = None
-    sbar_manager_entry : SBarManager = None
 
     def on_init(self) -> None:
         # 聚合K线，生成高周期K线

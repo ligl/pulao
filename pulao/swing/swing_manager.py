@@ -8,8 +8,6 @@ from ..bar import CBarManager, CBar, Fractal
 
 
 class SwingManager(Observable):
-    cbar_manager: CBarManager
-    df_swing : pl.DataFrame
 
     def __init__(self, cbar_manager: CBarManager):
         super().__init__()
@@ -22,9 +20,9 @@ class SwingManager(Observable):
             "high_price": pl.Float32,
             "low_price": pl.Float32,
             "direction": pl.UInt8,
-            "is_completed": pl.Boolean,
+            "is_completed": pl.Boolean, # 还未被确认的波段，即正在进行中的波段，在实时行情中尚未被确认
         }
-        self.df_swing = pl.DataFrame(schema=schema)
+        self.df_swing:pl.DataFrame = pl.DataFrame(schema=schema)
 
     def _on_cbar_created(self, event: EventType, payload: Any):
         if event == EventType.FRACTAL_CONFIRMED:

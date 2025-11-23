@@ -8,10 +8,6 @@ import polars as pl
 from .atr import AtrIndicator
 from pulao.bar import SBar
 
-# -----------------------------
-# IndicatorManager: manage multiple indicators per symbol
-# -----------------------------
-
 class IndicatorManager:
     """Manage a set of indicators for a single symbol/series.
 
@@ -67,11 +63,11 @@ class IndicatorManager:
 
         df is expected to contain columns required by indicators: close_price, high_price, low_price, etc.
         """
-        if self.dirty_index >= df.height():
+        if self.dirty_index >= df.height:
             return
 
         start = self.dirty_index
-        n = df.height()
+        n = df.height
 
         # Extract arrays once
         closes = df.select(pl.col("close_price")).to_series().to_list()
@@ -113,12 +109,12 @@ def join_indicators_to_df(base_df: pl.DataFrame, ind_df: pl.DataFrame) -> pl.Dat
 
     This function handles length mismatch by truncation or padding.
     """
-    if ind_df.height() == 0:
+    if ind_df.height == 0:
         return base_df
 
     # if lengths differ, make them equal by truncation/padding
-    base_n = base_df.height()
-    ind_n = ind_df.height()
+    base_n = base_df.height
+    ind_n = ind_df.height
     if ind_n < base_n:
         # pad ind_df with nulls
         pad = base_n - ind_n

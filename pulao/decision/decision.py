@@ -3,11 +3,10 @@ from pulao.object import BaseDecorator
 
 
 @BaseDecorator
-class Decision(Base):
-    action: DecisionAction
+class Decision:
 
     def __init__(self, action: DecisionAction):
-        self.action = action
+        self.action: DecisionAction = action
 
     def evaluate(self):
         # 综合评估，得出结论

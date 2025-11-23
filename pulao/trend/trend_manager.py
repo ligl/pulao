@@ -6,7 +6,6 @@ from ..swing import SwingManager
 
 
 class TrendManager(Observable):
-    swing_manager: SwingManager
 
     def __init__(self, swing_manager: SwingManager):
         super().__init__()

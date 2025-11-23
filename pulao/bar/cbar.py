@@ -37,14 +37,10 @@ class CBar:
 
 
 class Fractal:
-    left: CBar
-    middle: CBar
-    right: CBar
-
     def __init__(self, left: CBar, middle: CBar, right: CBar):
-        self.left = left
-        self.middle = middle
-        self.right = right
+        self.left: CBar = left
+        self.middle: CBar = middle
+        self.right: CBar = right
 
     def range(self):
         """
@@ -78,7 +74,7 @@ class Fractal:
         if left is None or middle is None or right is None:
             return SwingPointType.NONE
 
-        if  left.high_price < middle.high_price > right.high_price:  # 顶分形
+        if left.high_price < middle.high_price > right.high_price:  # 顶分形
             return SwingPointType.HIGH
         elif left.low_price > middle.low_price < right.low_price:  # 底分形
             return SwingPointType.LOW
