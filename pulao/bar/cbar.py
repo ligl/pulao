@@ -7,8 +7,8 @@ from pulao.constant import SwingPointType, SwingPointLevel
 
 @dataclass
 class CBar:
-    index : int # cbar_df index
-    start_index: int = 0 # sbar_df index
+    index: int  # cbar_df index
+    start_index: int = 0  # sbar_df index
     end_index: int = 0
     high_price: float = 0
     low_price: float = 0
@@ -29,10 +29,10 @@ class CBar:
         return self.low_price <= price <= self.high_price
 
     def is_inclusive(self, other: CBar) -> bool:
-        if self.low_price <= other.low_price  and self.high_price >= other.high_price:
-            return True # 内包
+        if self.low_price <= other.low_price and self.high_price >= other.high_price:
+            return True  # 内包
         if self.low_price >= other.low_price and self.high_price <= other.high_price:
-            return True # 外包
+            return True  # 外包
         return False
 
 
@@ -66,3 +66,21 @@ class Fractal:
         low1, high1 = self.range()
         low2, high2 = other.range()
         return max(low1, low2) <= min(high1, high2)
+
+    def validate(self) -> bool:
+        return (
+            Fractal.is_fractal(self.left, self.middle, self.right)
+            != SwingPointType.NONE
+        )
+
+    @classmethod
+    def is_fractal(cls, left: CBar, middle: CBar, right: CBar) -> SwingPointType:
+        if left is None or middle is None or right is None:
+            return SwingPointType.NONE
+
+        if  left.high_price < middle.high_price > right.high_price:  # 顶分形
+            return SwingPointType.HIGH
+        elif left.low_price > middle.low_price < right.low_price:  # 底分形
+            return SwingPointType.LOW
+        else:  # 不是分形
+            return SwingPointType.NONE

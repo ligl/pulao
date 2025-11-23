@@ -5,14 +5,13 @@ from pulao.constant import TrendDirection
 
 @dataclass
 class Trend:
-    direction: TrendDirection = TrendDirection.NONE  # up / down / range
-    start_index: int = 0 # cbar_df
+    index: int
+    direction: TrendDirection  # up / down / range
+    start_index: int = 0 # swing_df
     end_index: int = 0
     high_price: float = 0
     low_price: float = 0
     strength: float = 0
-    start_index_bar: int = 0  # 趋势中bar对应数据源的索引 sbar_df
-    end_index_bar: int = 0
     is_completed: bool = False  # 趋势是否完成
 
     @property

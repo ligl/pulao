@@ -29,9 +29,6 @@ class SBarManager(Observable):
             "close_price": pl.Float32,
             "volume": pl.Float32,  # 部分品种成交量是浮点
             "open_interest": pl.Float32,
-            "swing_point_type": pl.Utf8,  # 波段高低点标记
-            "swing_point_level": pl.Int8,  # 波段高低点级别（调整过的级别，正式用）
-            "swing_point_level_origin": pl.UInt8,  # 波段高低点级别（原始级别）
             "ema_short": pl.Float32,
             "ema_long": pl.Float32,
         }
@@ -60,15 +57,6 @@ class SBarManager(Observable):
             "high_price": sbar.high_price,
             "low_price": sbar.low_price,
             "close_price": sbar.close_price,
-            "swing_point_type": sbar.swing_point_type.value
-            if sbar.swing_point_type is not None
-            else SwingPointType.NONE.value,
-            "swing_point_level": sbar.swing_point_level.value
-            if sbar.swing_point_level is not None
-            else SwingPointLevel.NONE.value,
-            "swing_point_level_origin": sbar.swing_point_level.value
-            if sbar.swing_point_level is not None
-            else SwingPointLevel.NONE.value,
             "ema_short": sbar.ema_short,
             "ema_long": sbar.ema_long,
         }
@@ -83,25 +71,8 @@ class SBarManager(Observable):
         return sbar.index
 
     def get_at_index(self, index: int) -> SBar:
-        row = self.df_sbar.row(index, named=True)
-        sbar = SBar()
-        sbar.index = row["index"]
-        sbar.exchange = row["exchange"]
-        sbar.symbol = row["symbol"]
-        sbar.interval = row["interval"]
-        sbar.datetime = row["datetime"]
-        sbar.open_price = row["open_price"]
-        sbar.high_price = row["high_price"]
-        sbar.low_price = row["low_price"]
-        sbar.close_price = row["close_price"]
-        sbar.volume = row["volume"]
-        sbar.open_interest = row["open_interest"]
-        sbar.swing_point_type = row["swing_point_type"]
-        sbar.swing_point_level = row["swing_point_level"]
-        sbar.ema_short = row["ema_short"]
-        sbar.ema_long = row["ema_long"]
+        return SBar(**self.df_sbar.row(index, named=True))
 
-        return sbar
 
     def get_at_time(self, dt: Datetime) -> SBar:
         index = self.df_sbar.select(pl.col("datetime").search_sorted(dt)).item()

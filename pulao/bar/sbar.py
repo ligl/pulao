@@ -10,7 +10,7 @@ class SBar:
     SuperBar , BarData扩展
     """
 
-    index: int = 0  # 在SBarManager数据源中的索引，类似数据库中的自增id
+    index: int # 在SBarManager数据源中的索引
 
     symbol: str = None
     exchange: str = None
@@ -24,10 +24,6 @@ class SBar:
     high_price: float = 0
     low_price: float = 0
     close_price: float = 0
-
-    swing_point_type: SwingPointType = SwingPointType.NONE
-    swing_point_level: SwingPointLevel = SwingPointLevel.NONE
-    swing_point_level_origin: SwingPointLevel = SwingPointLevel.NONE
 
     ema_short: float = 0
     ema_long: float = 0

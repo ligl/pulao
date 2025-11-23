@@ -23,9 +23,9 @@ class BaseEnum(Enum):
 
     def __eq__(self, other):
         # 如果 other 的类型与 value 相同，则按 value 比较
-        if isinstance(other, type(self.value)):
-            return self.value == other
-        return super().__eq__(other)
+        if isinstance(other, Enum):
+            return self.value == other.value
+        return self.value == other
 
     def __ne__(self, other):
         # 明确返回不等于 __eq__ 的否定
@@ -47,9 +47,9 @@ class SwingPointType(BaseEnum):
     波段高低点
     """
 
-    HIGH = "high"
-    LOW = "low"
-    NONE = ""
+    HIGH = 1
+    LOW = -1
+    NONE = 0
 
 
 class SwingPointLevel(BaseEnum):
@@ -67,9 +67,8 @@ class SwingDirection(BaseEnum):
     波段方向
     """
 
-    UP = "up"
-    DOWN = "down"
-    NONE = ""
+    UP = 1
+    DOWN = -1
 
 
 class TrendDirection(BaseEnum):
@@ -77,10 +76,9 @@ class TrendDirection(BaseEnum):
     趋势方向
     """
 
-    UP = "up"
-    DOWN = "down"
-    RANGE = "range"
-    NONE = ""
+    UP = 1
+    DOWN = -1
+    RANGE = 2
 
 
 class DecisionAction(BaseEnum):
@@ -136,5 +134,6 @@ class EventType(BaseEnum):
 
     SBAR_CREATED = "bar.created"
     CBAR_CREATED = "cbar.created"
+    FRACTAL_CONFIRMED = "fractal.confirmed"
     SWING_CHANGED = "swing.changed"
     TREND_CHANGED = "trend.changed"

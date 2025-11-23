@@ -5,15 +5,15 @@ from pulao.constant import SwingDirection
 
 @dataclass
 class Swing:
-    index: int = 0
-    direction: SwingDirection = SwingDirection.NONE  # "up" / "down"
+    """
+    一次推动力量，其间没有明显反抗力量，由分形一顶一底相连构成
+    """
+    index: int
+    direction: SwingDirection
     start_index: int = 0  # 波段起始点索引 cbar_df
     end_index: int = 0
     high_price: float = 0
     low_price: float = 0
-    strength: float = 0
-    start_index_bar: int = 0  # 波段中bar对应数据源的索引 sbar_df
-    end_index_bar: int = 0
 
     is_completed: bool = False  # 波段是否完成
 
@@ -32,7 +32,6 @@ class Swing:
         span = max(self.high_price - self.low_price, 1e-9)
         if self.direction == SwingDirection.UP:
             return (price - self.low_price) / span
-        elif self.direction == SwingDirection.DOWN:
+        else:
             return (self.high_price - price) / span
-        return (price - self.low_price) / span
 
