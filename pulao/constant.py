@@ -42,6 +42,14 @@ class BaseEnum(Enum):
 
         raise ValueError(f"{value!r} is not a valid {cls.__name__}")
 
+class FractalType(BaseEnum):
+    """
+    分形类型
+    """
+    TOP = 1
+    BOTTOM = -1
+    NONE = 0
+
 class SwingPointType(BaseEnum):
     """
     波段高低点
@@ -50,7 +58,6 @@ class SwingPointType(BaseEnum):
     HIGH = 1
     LOW = -1
     NONE = 0
-
 
 class SwingPointLevel(BaseEnum):
     """
@@ -134,6 +141,5 @@ class EventType(BaseEnum):
 
     SBAR_CREATED = "bar.created"
     CBAR_CREATED = "cbar.created"
-    FRACTAL_CONFIRMED = "fractal.confirmed"
     SWING_CHANGED = "swing.changed"
     TREND_CHANGED = "trend.changed"

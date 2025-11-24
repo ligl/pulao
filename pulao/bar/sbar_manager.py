@@ -1,3 +1,5 @@
+from typing import List
+
 from polars import Datetime
 
 from pulao.events import Observable
@@ -6,6 +8,7 @@ from .sbar import SBar
 import polars as pl
 
 from ..constant import EventType, SwingPointType, SwingPointLevel
+
 
 class SBarManager(Observable):
     """
@@ -70,21 +73,15 @@ class SBarManager(Observable):
     def get_at_index(self, index: int) -> SBar:
         return SBar(**self.df_sbar.row(index, named=True))
 
-
     def get_at_time(self, dt: Datetime) -> SBar:
         index = self.df_sbar.select(pl.col("datetime").search_sorted(dt)).item()
         return self.get_at_index(index)
 
-    def get_range_index(self, start: int, end: int):
-        return self.df_sbar.slice(start, end - start + 1)
-
-    def get_range_time(self, start: Datetime, end: Datetime):
-        start_idx = self.df_sbar.select(pl.col("datetime").search_sorted(start)).item()
-        end_idx = self.df_sbar.select(
-            pl.col("datetime").search_sorted(end, side="right")
-        ).item()
-
-        return self.df_sbar.slice(start_idx, end_idx - start_idx + 1)
+    def get_sbar_list(self, start: int, end: int) -> List[SBar] | None:
+        df = self.df_sbar.slice(start, end - start + 1)
+        if df.is_empty():
+            return None
+        return [SBar(**row) for row in df.rows(named=True)]
 
     @property
     def total_count(self):

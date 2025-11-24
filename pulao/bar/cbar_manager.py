@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, List
 
 from pulao.constant import (
     SwingPointType,
@@ -23,23 +23,20 @@ class CBarManager(Observable):
             "end_index": pl.UInt32,
             "high_price": pl.Float32,
             "low_price": pl.Float32,
-            "swing_point_type": pl.UInt8,  # 波段高低点标记
-            "swing_point_level": pl.UInt8,  # 波段高低点级别（调整后的，正式用）
-            "swing_point_level_origin": pl.UInt8,  # 波段高低点级别（原始级别）
+            "swing_point_type": pl.Int8,  # 波段高低点标记
+            "swing_point_level": pl.Int8,  # 波段高低点级别（调整后的，正式用）
+            "swing_point_level_origin": pl.Int8,  # 波段高低点级别（原始级别）
         }
         self.df_cbar: pl.DataFrame = pl.DataFrame(schema=schema)  # 包含合并后的k线列表
         self.sbar_manager: SBarManager = sbar_manager
         self.sbar_manager.subscribe(self._on_sbar_created)
 
     def _on_sbar_created(self, event: EventType, sbar: Any):
-        self.detect(sbar)
-
-    def detect(self, sbar: SBar = None):
         # 1. K线包含处理
         self._agg_bar(sbar)
-        self.notify(EventType.CBAR_CREATED)
         # 2. 波段点检测
         self._detect_swing_point()
+        self.notify(EventType.CBAR_CREATED)
 
     def _agg_bar(self, sbar: SBar):
         """
@@ -217,4 +214,50 @@ class CBarManager(Observable):
                     .alias("swing_point_level_origin"),
                 ]
             )
-            self.notify(EventType.FRACTAL_CONFIRMED)
+
+    def get_last_cbar(self, count:int = None) -> List[CBar] | CBar | None:
+        if count is None:
+            count = 1
+        df = self.df_cbar.tail(count)
+        if df.is_empty():
+            return None
+        if count == 1:
+            return CBar(**df.row(0, named=True))
+        return  [CBar(**row) for row in df.rows(named=True)]
+
+    def get_cbar_list(self, start_index:int = None, end_index:int = None)-> List[CBar] | None:
+        if start_index is None:
+            start_index = 0
+        if end_index is None:
+            end_index = self.df_cbar.height - 1
+        df = self.df_cbar.slice(start_index, end_index - start_index + 1)
+        if df.is_empty():
+            return None
+        return  [CBar(**row) for row in df.rows(named=True)]
+
+    def get_fractal(self, index: int = None) -> Fractal | None:
+        if index is None:
+            # 取最新的分形
+            index = self.df_cbar.filter(pl.col("swing_point_type") != SwingPointType.NONE).tail(1).select(pl.col("index")).item()
+
+        start_index = index - 1
+        end_index = index + 1
+        rows = self.df_cbar.slice(start_index, end_index - start_index + 1).rows(
+            named=True
+        )
+        if len(rows) != 3:
+            return None
+        fractal = Fractal(
+            left=CBar(**rows[0]), middle=CBar(**rows[1]), right=CBar(**rows[2])
+        )
+        return fractal if fractal.valid() else None
+
+    def prev_fractal(self, index: int) -> Fractal | None:
+        prev_fractal_index = self.df_cbar.filter(
+            (pl.col("index") < index) & (pl.col("swing_point_type") != SwingPointType.NONE)).tail(1).select(pl.col("index")).item()
+        return self.get_fractal(prev_fractal_index)
+
+    def next_fractal(self, index: int) -> Fractal | None:
+        prev_fractal_index = self.df_cbar.filter(
+            (pl.col("index") > index) & (pl.col("swing_point_type") != SwingPointType.NONE)).head(1).select(pl.col("index")).item()
+        return self.get_fractal(prev_fractal_index)

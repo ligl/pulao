@@ -17,6 +17,10 @@ class Swing:
 
     is_completed: bool = False  # 波段是否完成
 
+    def __post_init__(self):
+        if isinstance(self.direction, int):
+            self.direction = SwingDirection(self.direction)
+
     @property
     def length(self):
         return self.end_index - self.start_index + 1
@@ -28,10 +32,13 @@ class Swing:
     def contains(self, price: float) -> bool:
         return self.low_price <= price <= self.high_price
 
-    def price_ratio(self, price: float) -> float:
-        span = max(self.high_price - self.low_price, 1e-9)
+    @property
+    def opposite_direction(self):
+        """
+        获取波段对立的方向
+        """
         if self.direction == SwingDirection.UP:
-            return (price - self.low_price) / span
+            return SwingDirection.DOWN
         else:
-            return (self.high_price - price) / span
+            return SwingDirection.UP
 

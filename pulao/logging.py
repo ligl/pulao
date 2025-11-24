@@ -1,16 +1,18 @@
+import json
 import os
 import logging
 from logging.handlers import QueueHandler, QueueListener, TimedRotatingFileHandler
 from queue import Queue
-from datetime import datetime
 import structlog
+from structlog.stdlib import BoundLogger
+
 
 # -------------------------
 # 1️⃣ 队列 + 文件配置
 # -------------------------
 def init_logging(log_dir="logs", level=logging.INFO):
     os.makedirs(log_dir, exist_ok=True)
-    log_file = os.path.join(log_dir, f"{datetime.now():%Y-%m-%d}.log")
+    log_file = os.path.join(log_dir, "pulao.log")
 
     # 标准 logging handler
     file_handler = TimedRotatingFileHandler(
@@ -43,7 +45,7 @@ def init_logging(log_dir="logs", level=logging.INFO):
             structlog.processors.StackInfoRenderer(),
             structlog.processors.format_exc_info,
             structlog.processors.UnicodeDecoder(),
-            structlog.processors.JSONRenderer(),  # 输出 JSON
+            structlog.processors.JSONRenderer(serializer=lambda obj, **kw: json.dumps(obj, ensure_ascii=False, **kw)),  # 输出 JSON
         ],
         context_class=dict,  # 用户 key=value 会存到 context
         logger_factory=structlog.stdlib.LoggerFactory(),
@@ -56,4 +58,4 @@ def init_logging(log_dir="logs", level=logging.INFO):
 # -------------------------
 # 3️⃣ 获取 logger
 # -------------------------
-logger = structlog.get_logger()
+logger:BoundLogger = structlog.get_logger()
