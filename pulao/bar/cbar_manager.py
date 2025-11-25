@@ -3,9 +3,8 @@ from __future__ import annotations
 from typing import Any, List
 
 from pulao.constant import (
-    SwingPointType,
     EventType,
-    SwingDirection,
+    SwingDirection, FractalType,
 )
 from pulao.events import Observable
 from pulao.bar import SBar, SBarManager, CBar, Fractal
@@ -24,7 +23,7 @@ class CBarManager(Observable):
             "end_index": pl.UInt32,
             "high_price": pl.Float32,
             "low_price": pl.Float32,
-            "swing_point_type": pl.Int8,  # 波段高低点标记
+            "fractal_type": pl.Int8,
         }
         self.df_cbar: pl.DataFrame = pl.DataFrame(schema=schema)  # 包含合并后的k线列表
         self.sbar_manager: SBarManager = sbar_manager
@@ -33,8 +32,9 @@ class CBarManager(Observable):
     def _on_sbar_created(self, event: EventType, sbar: Any):
         # 1. K线包含处理
         self._agg_bar(sbar)
-        # 2. 波段点检测
-        self._detect_swing_point()
+        # 2. 分形检测
+        self._detect_fractal()
+
         self.notify(EventType.CBAR_CREATED)
 
     def _agg_bar(self, sbar: SBar):
@@ -166,18 +166,18 @@ class CBarManager(Observable):
             "end_index": end_index,
             "high_price": high_price,
             "low_price": low_price,
-            "swing_point_type": SwingPointType.NONE.value,
+            "fractal_type": FractalType.NONE.value,
         }
         self.df_cbar = self.df_cbar.vstack(
             pl.DataFrame([new_cbar], schema=self.df_cbar.schema)
         )
 
-    def _detect_swing_point(self):
-        # 波段点识别
+    def _detect_fractal(self):
+        # 分形识别
         # region 0. 算法说明
         # 0. 分形：分形由3根相邻K线组成，有顶分形（中间高两边低）和底分形两种（中间低两边高），需要在包含合并处理过的k线中进行
-        # 1. 波段点定义：每个分形即视为一个波段点，
-        # 2. 波段点判别方法：接收到sbar后，对前一个bar进行顶底分形的判定
+        # 1. 分形定义：每个分形即视为一个分形，
+        # 2. 分形判别方法：接收到sbar后，对前一个bar进行顶底分形的判定
         # endregion
 
         # 分形判断
@@ -188,16 +188,16 @@ class CBarManager(Observable):
 
         left_bar, middle_bar, right_bar = last_bar_list
 
-        swing_point_type = Fractal.is_fractal(left_bar, middle_bar, right_bar)
+        fractal_type = Fractal.is_fractal(left_bar, middle_bar, right_bar)
 
-        if swing_point_type != SwingPointType.NONE:  # 是分形
+        if fractal_type != FractalType.NONE:  # 是分形
             # 是分形，更新分形标识，更新cbar_df数据源
             self.df_cbar = self.df_cbar.with_columns(
                 [
                     pl.when(pl.col("index") == middle_bar.index)
-                    .then(pl.lit(swing_point_type.value))
-                    .otherwise(pl.col("swing_point_type"))
-                    .alias("swing_point_type"),
+                    .then(pl.lit(fractal_type.value))
+                    .otherwise(pl.col("fractal_type"))
+                    .alias("fractal_type"),
                 ]
             )
             logger.debug("找到分形",{"df_cbar_height":self.df_cbar.height})
@@ -225,7 +225,7 @@ class CBarManager(Observable):
     def get_fractal(self, index: int = None) -> Fractal | None:
         if index is None:
             # 取最新的分形
-            index = self.df_cbar.filter(pl.col("swing_point_type") != SwingPointType.NONE).tail(1).select(pl.col("index")).item()
+            index = self.df_cbar.filter(pl.col("fractal_type") != FractalType.NONE).tail(1).select(pl.col("index")).item()
 
         start_index = index - 1
         end_index = index + 1
@@ -241,10 +241,10 @@ class CBarManager(Observable):
 
     def prev_fractal(self, index: int) -> Fractal | None:
         prev_fractal_index = self.df_cbar.filter(
-            (pl.col("index") < index) & (pl.col("swing_point_type") != SwingPointType.NONE)).tail(1).select(pl.col("index")).item()
+            (pl.col("index") < index) & (pl.col("fractal_type") != FractalType.NONE)).tail(1).select(pl.col("index")).item()
         return self.get_fractal(prev_fractal_index)
 
     def next_fractal(self, index: int) -> Fractal | None:
         prev_fractal_index = self.df_cbar.filter(
-            (pl.col("index") > index) & (pl.col("swing_point_type") != SwingPointType.NONE)).head(1).select(pl.col("index")).item()
+            (pl.col("index") > index) & (pl.col("fractal_type") != FractalType.NONE)).head(1).select(pl.col("index")).item()
         return self.get_fractal(prev_fractal_index)

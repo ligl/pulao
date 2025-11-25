@@ -50,14 +50,6 @@ class FractalType(BaseEnum):
     BOTTOM = -1
     NONE = 0
 
-class SwingPointType(BaseEnum):
-    """
-    波段高低点
-    """
-    HIGH = 1
-    LOW = -1
-    NONE = 0
-
 class SwingDirection(BaseEnum):
     """
     波段方向

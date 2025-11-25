@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from pulao.constant import SwingPointType
+from ..constant import FractalType
 
 
 @dataclass
@@ -13,11 +13,11 @@ class CBar:
     high_price: float = 0
     low_price: float = 0
 
-    swing_point_type: SwingPointType = SwingPointType.NONE
+    fractal_type: FractalType = FractalType.NONE
 
     def __post_init__(self):
-        if isinstance(self.swing_point_type, int):
-            self.swing_point_type = SwingPointType(self.swing_point_type)
+        if isinstance(self.fractal_type, int):
+            self.fractal_type = FractalType(self.fractal_type)
 
     @property
     def length(self):
