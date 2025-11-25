@@ -39,6 +39,7 @@ class SBarManager(Observable):
         self.indicator_manager.register(EmaIndicator(60))
 
     def append(self, sbar: SBar) -> int:
+        # 为sbar设置index，唯一的
         sbar.index = self.df_sbar.height
         # 计算ema20、ema60指标
         indicator_dict = self.indicator_manager.update(sbar)

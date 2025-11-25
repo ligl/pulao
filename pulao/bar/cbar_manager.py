@@ -11,8 +11,6 @@ from pulao.bar import SBar, SBarManager, CBar, Fractal
 
 import polars as pl
 
-from pulao.logging import logger
-
 
 class CBarManager(Observable):
     def __init__(self, sbar_manager: SBarManager):
@@ -159,7 +157,6 @@ class CBarManager(Observable):
     def _append_cbar(
         self, start_index: int, end_index: int, high_price: float, low_price: float
     ):
-        """封装追加逻辑，避免重复代码"""
         new_cbar = {
             "index": self.df_cbar.height,
             "start_index": start_index,
@@ -200,7 +197,7 @@ class CBarManager(Observable):
                     .alias("fractal_type"),
                 ]
             )
-            logger.debug("找到分形",{"df_cbar_height":self.df_cbar.height})
+            # logger.debug("找到分形",{"df_cbar_height":self.df_cbar.height})
 
     def get_last_cbar(self, count:int = None) -> List[CBar] | CBar | None:
         if count is None:

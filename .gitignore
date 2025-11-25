@@ -44,3 +44,5 @@ lab/
 # 排除其他项目
 vnpy/
 ytc/
+/examples/logs/pulao.log
+/examples/logs/pulao.log.2025-11-24

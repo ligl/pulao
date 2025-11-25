@@ -1,6 +1,7 @@
 import json
 import os
 import logging
+import sys
 from logging.handlers import QueueHandler, QueueListener, TimedRotatingFileHandler
 from queue import Queue
 import structlog
@@ -18,7 +19,7 @@ def init_logging(log_dir="logs", level=logging.INFO):
     file_handler = TimedRotatingFileHandler(
         filename=log_file, when="midnight", interval=1, backupCount=30, encoding="utf-8"
     )
-    console_handler = logging.StreamHandler()
+    console_handler = logging.StreamHandler(sys.stdout)
 
     # 队列异步写日志
     log_queue = Queue(-1)
@@ -49,7 +50,6 @@ def init_logging(log_dir="logs", level=logging.INFO):
         ],
         context_class=dict,  # 用户 key=value 会存到 context
         logger_factory=structlog.stdlib.LoggerFactory(),
-        wrapper_class=None,  # 避免类型检查报错
         cache_logger_on_first_use=True,
     )
 
