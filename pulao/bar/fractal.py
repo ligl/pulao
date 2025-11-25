@@ -70,17 +70,29 @@ class Fractal:
             low2, high2 = other.middle.low_price, self.middle.high_price
         return max(low1, low2) <= min(high1, high2)
 
-    def valid(self) -> FractalType:
-        return Fractal.is_fractal(self.left, self.middle, self.right)
+    def fractal_type(self, strict_model:bool = True) -> FractalType:
+        return Fractal.is_fractal(self.left, self.middle, self.right, strict_model=strict_model)
 
     @classmethod
-    def is_fractal(cls, left: CBar, middle: CBar, right: CBar) -> FractalType:
+    def is_fractal(cls, left: CBar, middle: CBar, right: CBar, strict_model:bool = False) -> FractalType:
+        """
+        判断分形
+        :param left: left cbar
+        :param middle:  middle cbar
+        :param right: right cbar
+        :param strict_model: 是否严格验证，False:只对比价格关系，True：不仅对比价格关系，还检验middle cbar的类型是否正常
+        :return:
+        """
         if left is None or middle is None or right is None:
             return FractalType.NONE
 
         if left.high_price < middle.high_price > right.high_price:  # 顶分形
+            if strict_model:
+                return FractalType.TOP if middle.fractal_type == FractalType.TOP else FractalType.NONE
             return FractalType.TOP
         elif left.low_price > middle.low_price < right.low_price:  # 底分形
+            if strict_model:
+                return FractalType.BOTTOM if middle.fractal_type == FractalType.BOTTOM else FractalType.NONE
             return FractalType.BOTTOM
 
         return FractalType.NONE

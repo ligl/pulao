@@ -1,6 +1,6 @@
 from typing import Callable, Any, List
 
-from pulao.constant import EventType
+from pulao.constant import EventType, Const
 
 Subscriber = Callable[[EventType, Any], None]
 
@@ -21,9 +21,12 @@ class Observable:
 
     def notify(self, event_type: EventType, payload: Any = None) -> None:
         for fn in list(self._subscribers):
-            try:
+            if Const.DEBUG:
                 fn(event_type, payload)
-            except Exception:
-                import traceback
+            else:
+                try:
+                    fn(event_type, payload)
+                except Exception:
+                    import traceback
 
-                traceback.print_exc()
+                    traceback.print_exc()

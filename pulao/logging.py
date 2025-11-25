@@ -1,10 +1,13 @@
+import atexit
 import json
 import os
 import logging
+import signal
 import sys
 from logging.handlers import QueueHandler, QueueListener, TimedRotatingFileHandler
 from queue import Queue
 import structlog
+from concurrent_log_handler import ConcurrentTimedRotatingFileHandler
 from structlog.stdlib import BoundLogger
 
 
@@ -16,8 +19,16 @@ def init_logging(log_dir="logs", level=logging.INFO):
     log_file = os.path.join(log_dir, "pulao.log")
 
     # 标准 logging handler
-    file_handler = TimedRotatingFileHandler(
-        filename=log_file, when="midnight", interval=1, backupCount=30, encoding="utf-8"
+    # file_handler = TimedRotatingFileHandler(
+    #     filename=log_file, when="midnight", interval=1, backupCount=30, encoding="utf-8"
+    # )
+    file_handler = ConcurrentTimedRotatingFileHandler(
+        filename=log_file,
+        when="midnight",
+        interval=1,
+        backupCount=30,
+        encoding="utf-8",
+        utc=False,
     )
     console_handler = logging.StreamHandler(sys.stdout)
 
@@ -42,20 +53,37 @@ def init_logging(log_dir="logs", level=logging.INFO):
             # 添加标准字段
             structlog.stdlib.add_log_level,  # level name
             structlog.stdlib.add_logger_name,  # logger name / module
-            structlog.processors.TimeStamper(fmt="%Y-%m-%d %H:%M:%S", key="time"),
+            structlog.processors.TimeStamper(fmt="%Y-%m-%d %H:%M:%S", key="time", utc=False),
             structlog.processors.StackInfoRenderer(),
             structlog.processors.format_exc_info,
             structlog.processors.UnicodeDecoder(),
-            structlog.processors.JSONRenderer(serializer=lambda obj, **kw: json.dumps(obj, ensure_ascii=False, **kw)),  # 输出 JSON
+            structlog.processors.JSONRenderer(
+                serializer=lambda obj, **kw: json.dumps(obj, ensure_ascii=False, **kw)
+            ),  # 输出 JSON
         ],
         context_class=dict,  # 用户 key=value 会存到 context
         logger_factory=structlog.stdlib.LoggerFactory(),
         cache_logger_on_first_use=True,
     )
 
+    def close_listener():
+        listener.stop()
+
+    # 退出回调
+    atexit.register(close_listener)
+
+    # 处理 SIGTERM / SIGINT
+    def cleanup(signum, frame):
+        close_listener()
+        sys.exit(0)
+
+    signal.signal(signal.SIGTERM, cleanup)
+    signal.signal(signal.SIGINT, cleanup)
+
     return listener
+
 
 # -------------------------
 # 3️⃣ 获取 logger
 # -------------------------
-logger:BoundLogger = structlog.get_logger()
+logger: BoundLogger = structlog.get_logger()

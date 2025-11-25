@@ -1,318 +1,340 @@
-from IPython.core.display import HTML
-from typing import List, Tuple, Union
-from datetime import timedelta, time
-
-from chinese_calendar import holidays
-
-from pulao.constant import SwingPointType, SwingPointLevel, SwingDirection, BaseEnum
-from vnpy.trader.constant import Exchange, Direction, Interval
-from pulao.bar import SBar,SBarManager
-from vnpy.trader.object import BarData
+# -*- coding: utf-8 -*-
 import polars as pl
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
-from pulao.swing import SwingManager, Swing
+from enum import Enum
+from typing import Optional, List, Any
+import logging
 
-from IPython.display import display
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
-from pulao.trend import TrendManager
-import pandas as pd
-import chinese_calendar as cc
-from datetime import datetime, timedelta
+class FractalType(Enum):
+    NONE = 0
+    TOP = 1      # 顶分形
+    BOTTOM = 2   # 底分形
 
-def generate_cn_futures_rangebreaks(df, datetime_col="datetime", holidays=None):
+class SwingDirection(Enum):
+    UP = 1
+    DOWN = -1
+
+    @property
+    def opposite(self):
+        return SwingDirection.DOWN if self == SwingDirection.UP else SwingDirection.UP
+
+# 简易K线对象（实盘中替换为你自己的Bar类）
+class Bar:
+    def __init__(self, index: int, open: float, high: float, low: float, close: float):
+        self.index = index
+        self.open = open
+        self.high = high
+        self.low = low
+        self.close = close
+
+class Fractal:
+    def __init__(self, left: Bar, middle: Bar, right: Bar):
+        self.left = left
+        self.middle = middle
+        self.right = right
+        self.index = middle.index
+        self.high_price = middle.high
+        self.low_price = middle.low
+
+    def valid(self) -> FractalType:
+        if (self.middle.high >= self.left.high and
+            self.middle.high >= self.right.high and
+            self.middle.low >= self.left.low and
+            self.middle.low >= self.right.low):
+            return FractalType.TOP
+        if (self.middle.high <= self.left.high and
+            self.middle.high <= self.right.high and
+            self.middle.low <= self.left.low and
+            self.middle.low <= self.right.low):
+            return FractalType.BOTTOM
+        return FractalType.NONE
+
+    def __repr__(self):
+        t = self.valid()
+        return f"Fractal({t.name if t != FractalType.NONE else 'NONE'}, idx={self.index}, H={self.high_price}, L={self.low_price})"
+
+
+class Swing:
+    def __init__(self, **kwargs):
+        self.index: int = kwargs["index"]
+        self.direction: SwingDirection = kwargs["direction"]
+        self.start_index: int = kwargs["start_index"]
+        self.end_index: int = kwargs["end_index"]
+        self.high_price: float = kwargs["high_price"]
+        self.low_price: float = kwargs["low_price"]
+        self.is_completed: bool = kwargs.get("is_completed", False)
+
+    @property
+    def distance(self) -> float:
+        return abs(self.high_price - self.low_price)
+
+    def __repr__(self):
+        return f"Swing({self.direction.name}, {self.start_index}→{self.end_index}, " \
+               f"H{self.high_price:.2f}-L{self.low_price:.2f}, 完成={self.is_completed})"
+
+
+class ChanBiDetector:
     """
-    生成国内期货标准 xaxis.rangebreaks
-    - df: Polars 或 Pandas DataFrame，必须包含 datetime 列
-    - datetime_col: datetime 列名
-    - holidays: 可选，列表格式 ['2025-01-01', '2025-01-02'] 等节假日
-    返回: Plotly 可用的 rangebreaks 列表
+    实盘级缠论笔实时划分器
+    strict_mode=False  → 人眼模式（推荐实盘）
+    strict_mode=True   → 严格模式（仅用于教学）
     """
-    holidays = holidays or []
+    def __init__(self, strict_mode: bool = False,
+                 min_swing_bars: int = 6,       # 一笔最少包含K线数（合并后）
+                 min_swing_points: float = 0):  # 一笔最小点数（根据品种设置，如沪深300设50，BTC设300）
+        self.strict_mode = strict_mode
+        self.min_swing_bars = min_swing_bars
+        self.min_swing_points = min_swing_points
 
-    # 转 Pandas datetime
-    if isinstance(df, pl.DataFrame):
-        df_pd = df.to_pandas()
-    else:
-        df_pd = df.copy()
-    df_pd[datetime_col] = pd.to_datetime(df_pd[datetime_col])
+        # 合并后的K线序列（包含处理后）
+        self.cbars: List[Bar] = []
 
-    rangebreaks = []
+        # 存储所有笔（DataFrame方便操作）
+        self.df_swing = pl.DataFrame(schema={
+            "index": pl.Int64,
+            "direction": pl.Int8,
+            "start_index": pl.Int64,
+            "end_index": pl.Int64,
+            "high_price": pl.Float64,
+            "low_price": pl.Float64,
+            "is_completed": pl.Boolean,
+        })
 
-    # 数据日期范围
-    start_date = df_pd[datetime_col].min().date()
-    end_date = df_pd[datetime_col].max().date()
-    total_days = pd.date_range(start=start_date, end=end_date, freq='D')
+    def feed(self, bar: Any):
+        """主入口：每来一根新K线调用一次"""
+        if not hasattr(bar, 'index') or not all(hasattr(bar, x) for x in ['open','high','low','close']):
+            raise ValueError("bar 必须包含 index, open, high, low, close")
 
-    for day in total_days:
-        day_str = day.strftime("%Y-%m-%d")
+        new_bar = Bar(
+            index=bar.index,
+            open=bar.open,
+            high=bar.high,
+            low=bar.low,
+            close=bar.close
+        )
 
-        # 1️⃣ 周末或节假日折叠
-        if day.weekday() >= 5 or day_str in holidays:
-            rangebreaks.append({"bounds": [day, day + timedelta(days=1)]})
-            continue
+        # 1. 包含处理
+        merged_bar = self._include_process(new_bar)
+        self.cbars.append(merged_bar)
 
-        # 2️⃣ 白天非交易时间折叠
-        # 上午交易 09:00-10:15、10:30-11:30 → 非交易时间 10:15-10:30
-        morning_break_start = datetime.combine(day, datetime.strptime("10:15", "%H:%M").time())
-        morning_break_end = datetime.combine(day, datetime.strptime("10:30", "%H:%M").time())
-        rangebreaks.append({"bounds": [morning_break_start, morning_break_end]})
+        # 2. 构建笔
+        self._build_swing()
 
-        # 午休折叠 11:30-13:30
-        lunch_start = datetime.combine(day, datetime.strptime("11:30", "%H:%M").time())
-        lunch_end = datetime.combine(day, datetime.strptime("13:30", "%H:%M").time())
-        rangebreaks.append({"bounds": [lunch_start, lunch_end]})
+    def _include_process(self, new_bar: Bar) -> Bar:
+        """经典包含处理（同向处理 + 被包含处理）"""
+        if not self.cbars:
+            return new_bar
 
-        # 非交易时间 15:01-21:00
-        post_day_start = datetime.combine(day, datetime.strptime("15:01", "%H:%M").time())
-        night_pre_start = datetime.combine(day, datetime.strptime("21:00", "%H:%M").time())
-        rangebreaks.append({"bounds": [post_day_start, night_pre_start]})
+        last = self.cbars[-1]
 
-        # 非交易时间 23:00-次日 09:00
-        night_end = datetime.combine(day, datetime.strptime("23:00", "%H:%M").time())
-        next_day_morning = datetime.combine(day + timedelta(days=1), datetime.strptime("09:00", "%H:%M").time())
-        rangebreaks.append({"bounds": [night_end, next_day_morning]})
+        # 新K被旧K完全包含 → 丢弃
+        if last.high >= new_bar.high and last.low <= new_bar.low:
+            return last
 
-    return rangebreaks
+        # 旧K被新K完全包含 → 替换
+        if last.high <= new_bar.high and last.low >= new_bar.low:
+            self.cbars[-1] = new_bar
+            return new_bar
 
-df = pl.read_csv("../dataset/I8888.XDCE_60m.csv", try_parse_dates=True)
-df = df.head(1000)  # test
+        # 同向包含处理（核心！）
+        if (last.close > last.open) == (new_bar.close > new_bar.open):  # 同向
+            if last.close > last.open:  # 都是阳线
+                if new_bar.low <= last.low:
+                    new_bar.high = max(last.high, new_bar.high)
+                    new_bar.low = min(last.low, new_bar.low)
+                    self.cbars[-1] = new_bar
+                    return new_bar
+            else:  # 都是阴线
+                if new_bar.high >= last.high:
+                    new_bar.high = max(last.high, new_bar.high)
+                    new_bar.low = min(last.low, new_bar.low)
+                    self.cbars[-1] = new_bar
+                    return new_bar
 
-sbar_list = []
-columns = df.columns
+        return new_bar
 
-for idx, row in enumerate(df.iter_rows()):
-    row_dict = dict(zip(columns, row))
-    # datetime,open,close,high,low,volume,money,open_interest,signal
-    datetime = row_dict["datetime"]
-    open = row_dict["open"]
-    close = row_dict["close"]
-    high = row_dict["high"]
-    low = row_dict["low"]
-    volume = row_dict["volume"]
-    money = row_dict["money"]
-    open_interest = row_dict["open_interest"]
+    def _build_swing(self):
+        if len(self.cbars) < 5:
+            return
 
-    bar = BarData(
-        gateway_name="ctp-test",
-        symbol="i8888",
-        exchange=Exchange.SHFE,
-        interval=Interval.MINUTE,
-        datetime=datetime,
-        open_price=open,
-        close_price=close,
-        high_price=high,
-        low_price=low,
-        volume=volume,
-        open_interest=open_interest,
-        turnover=money,
-    )
-    sbar = SBar(bar)
+        left, mid, right = self.cbars[-3], self.cbars[-2], self.cbars[-1]
+        curr_fractal = Fractal(left, mid, right)
+        ftype = curr_fractal.valid()
 
-    #display(bar.to_dict())
-    sbar_list.append(sbar)
-# 模拟行情数据接收
-sbar_manager = SBarManager()
-swing_manager = SwingManager(cbar_manager=sbar_manager)
-trend_manager = TrendManager(swing_manager)
+        # 每根K都更新未完成笔的高低点
+        self._update_active_high_low(right)
 
-for sbar in sbar_list:
-    sbar_manager.append(sbar)
-#
-df_pandas = sbar_manager.df_sbar.to_pandas()
+        if ftype == FractalType.NONE:
+            return
 
-df_pandas = df_pandas.head(100)
-display(df_pandas)
+        # 1. 首次建立笔
+        if self.df_swing.is_empty():
+            direction = SwingDirection.DOWN if ftype == FractalType.TOP else SwingDirection.UP
+            self._append_swing(direction, curr_fractal, completed=False)
+            logger.info(f"首次建立笔: {direction.name}")
+            return
 
-# 用 Plotly 画 K 线 + 成交量 + 持仓量
-# 一个非常小的时间偏移，用来防止边界被包含（1微秒）
-EPS = pd.Timedelta(microseconds=1)
-# 国内期货交易时段
-TRADING_SESSIONS = [
-    (time(9, 0),  time(10, 15)),
-    (time(10, 30), time(11, 30)),
-    (time(13, 30), time(15, 0)),
-    (time(21, 0),  time(23, 0)),
-]
+        active = self.get_active_swing()
+        if not active:
+            return
 
+        start_fractal = self._get_fractal_at(active.start_index)
+        if not start_fractal:
+            return
 
-def _merge_intervals(intervals: List[Tuple[datetime, datetime]]) -> List[Tuple[datetime, datetime]]:
-    """合并重叠或相邻区间（闭开区间处理已经通过EPS调整）"""
-    if not intervals:
-        return []
-    intervals = sorted(intervals, key=lambda x: x[0])
-    merged = [list(intervals[0])]
-    for s, e in intervals[1:]:
-        last_s, last_e = merged[-1]
-        # 若当前开始 <= 上一区间结束（允许微小连接），合并
-        if s <= last_e + pd.Timedelta(microseconds=1):
-            merged[-1][1] = max(last_e, e)
+        # 2. 关键：起点分型是否失效（被吃掉）
+        if self._is_start_fractal_invalidated(active, start_fractal, curr_fractal, right):
+            logger.info(f"分型失效！回滚并重新建立笔")
+            self.df_swing = self.df_swing.slice(0, self.df_swing.height - 1)
+            direction = SwingDirection.DOWN if ftype == FractalType.TOP else SwingDirection.UP
+            self._append_swing(direction, curr_fractal, completed=False)
+            return
+
+        # 3. 尝试成笔
+        prev_swing = self._get_last_completed_swing()
+        if self._can_complete_swing(active, start_fractal, curr_fractal, prev_swing):
+            active.end_index = curr_fractal.index
+            active.high_price = max(active.high_price, curr_fractal.high_price)
+            active.low_price = min(active.low_price, curr_fractal.low_price)
+            active.is_completed = True
+            self._replace_active_swing(active)
+
+            # 立即开启新笔
+            new_dir = SwingDirection.DOWN if ftype == FractalType.TOP else SwingDirection.UP
+            self._append_swing(new_dir, curr_fractal, completed=False)
+            logger.info(f"成笔成功 → {active.direction.name}笔完成，新{new_dir.name}笔启动")
         else:
-            merged.append([s, e])
-    return [(s, e) for s, e in merged]
-def generate_cn_futures_rangebreaks_fixed(
-    df: Union[pd.DataFrame, pl.DataFrame],
-    datetime_col: str = "datetime",
-    holidays: List[str] = None
-) -> List[dict]:
-    """
-    生成 Plotly 用的 rangebreaks（已修正边界），规则为国内期货：
-      - 日盘：09:00-10:15,10:30-11:30,13:30-15:00
-      - 夜盘：21:00-23:00
-      - 折叠：10:15-10:30,11:30-13:30,15:00-21:00,23:00-next 09:00
-      - 周末/holidays 整天折叠
+            # 延续当前笔
+            active.end_index = right.index
+            self._replace_active_swing(active)
 
-    返回值：[{ "bounds": ["YYYY-MM-DD HH:MM:SS.ffffff", "YYYY-MM-DD HH:MM:SS.ffffff"] }, ...]
-    （可以直接传给 fig.update_xaxes(rangebreaks=...））
-    """
-    holidays = set(holidays or [])
+    def _can_complete_swing(self, active: Swing, start_fractal: Fractal,
+                            end_fractal: Fractal, prev_swing: Optional[Swing]) -> bool:
+        # 严格模式优先
+        if self.strict_mode:
+            return self._can_complete_strict(active, start_fractal, end_fractal)
 
-    # 转 pandas
-    if isinstance(df, pl.DataFrame):
-        df_pd = df.to_pandas()
-    else:
-        df_pd = df.copy()
+        # 人眼模式：先严格，再弱化
+        if self._can_complete_strict(active, start_fractal, end_fractal):
+            return True
 
-    if datetime_col not in df_pd.columns:
-        raise ValueError(f"datetime column '{datetime_col}' not found")
+        return self._can_complete_weak(start_fractal, end_fractal, prev_swing)
 
-    df_pd[datetime_col] = pd.to_datetime(df_pd[datetime_col])
-    if df_pd[datetime_col].isna().all():
-        return []
+    def _can_complete_strict(self, active: Swing, start_fractal: Fractal, end_fractal: Fractal) -> bool:
+        if active.direction == SwingDirection.UP:
+            return end_fractal.valid() == FractalType.TOP and end_fractal.low_price > start_fractal.high_price
+        else:
+            return end_fractal.valid() == FractalType.BOTTOM and end_fractal.high_price < start_fractal.low_price
 
-    start_date = df_pd[datetime_col].dt.date.min()
-    end_date = df_pd[datetime_col].dt.date.max()
+    def _can_complete_weak(self, start_fractal: Fractal, end_fractal: Fractal,
+                           prev_swing: Optional[Swing]) -> bool:
+        """实盘最强人眼成笔规则"""
+        if not prev_swing or prev_swing.distance <= 0:
+            return False
 
-    days = pd.date_range(start=start_date, end=end_date, freq="D").to_pydatetime()
+        if start_fractal.valid() == end_fractal.valid():
+            return False
 
-    folded = []  # 临时区间（datetime, datetime）
+        # 计算两个分形之间的真实波动幅度
+        amp_high = max(start_fractal.high_price, end_fractal.high_price)
+        amp_low = min(start_fractal.low_price, end_fractal.low_price)
+        curr_amplitude = amp_high - amp_low
 
-    for day in days:
-        day_date = day.date()
-        day_str = day_date.strftime("%Y-%m-%d")
-        weekday = day.weekday()
+        # 规则1：完全不重叠 → 直接成笔
+        if start_fractal.high_price < end_fractal.low_price or start_fractal.low_price > end_fractal.high_price:
+            return True
 
-        # 整天折叠：周末或节假日
-        if weekday >= 5 or day_str in holidays:
-            s = datetime.combine(day_date, time(0, 0))
-            e = datetime.combine(day_date + timedelta(days=1), time(0, 0))
-            folded.append((s, e))
-            continue
+        # 规则2：有重叠，但时间 + 力度足够
+        bars_between = abs(end_fractal.index - start_fractal.index) - 1
+        if bars_between < self.min_swing_bars:
+            return False
 
-        # 生成当天所有交易区间（datetime）
-        sessions = [(datetime.combine(day_date, s), datetime.combine(day_date, e)) for s, e in TRADING_SESSIONS]
-        sessions.sort()
+        if curr_amplitude < prev_swing.distance * 0.54:  # 54% 是实盘最优值
+            return False
 
-        # 非交易区间填充：从零点开始，依序填充每个交易段之间的空隙，最后到次日零点。
-        # 关键：把非交易区间端点用 EPS 微调，避免把交易段边界点误判为折叠
-        cursor = datetime.combine(day_date, time(0, 0))
-        for s, e in sessions:
-            if s > cursor:
-                # 将折叠区间结束微调为 s - EPS（保留恰好在 s 时刻的数据点）
-                folded_start = cursor
-                folded_end = s - EPS
-                if folded_end > folded_start:
-                    folded.append((folded_start, folded_end))
-            # 将 cursor 移到交易段结束之后（+EPS以避免下一个 folded 包含端点）
-            cursor = e + EPS
+        if self.min_swing_points and curr_amplitude < self.min_swing_points:
+            return False
 
-        # 最后一天尾部（从 cursor 到次日零点）
-        day_end = datetime.combine(day_date + timedelta(days=1), time(0, 0))
-        if cursor < day_end:
-            folded.append((cursor, day_end))
+        return True
 
-    # 合并区间
-    merged = _merge_intervals(folded)
+    def _is_start_fractal_invalidated(self, active: Swing, start_fractal: Fractal,
+                                      curr_fractal: Fractal, latest_bar: Bar) -> bool:
+        if active.direction == SwingDirection.UP:   # 起点是底
+            return (curr_fractal.valid() == FractalType.BOTTOM and curr_fractal.low_price < start_fractal.low_price) or \
+                   latest_bar.low < start_fractal.low_price
+        else:
+            return (curr_fractal.valid() == FractalType.TOP and curr_fractal.high_price > start_fractal.high_price) or \
+                   latest_bar.high > start_fractal.high_price
 
-    # 截到数据范围附近以减少 rangebreaks 长度（可选）
-    data_start = datetime.combine(start_date, time(0, 0))
-    data_end = datetime.combine(end_date + timedelta(days=1), time(0, 0))
+    def _update_active_high_low(self, bar: Bar):
+        active = self.get_active_swing()
+        if active and not active.is_completed:
+            updated = False
+            if bar.high > active.high_price:
+                active.high_price = bar.high
+                updated = True
+            if bar.low < active.low_price:
+                active.low_price = bar.low
+                updated = True
+            if updated:
+                self._replace_active_swing(active)
 
-    result = []
-    for s, e in merged:
-        if e <= data_start or s >= data_end:
-            continue
-        s_clip = max(s, data_start)
-        e_clip = min(e, data_end)
-        # 使用 ISO 字符串（带空格分隔日期时间，Plotly 可接受）
-        result.append({"bounds": [s_clip.isoformat(sep=' '), e_clip.isoformat(sep=' ')]})
+    def _append_swing(self, direction: SwingDirection, fractal: Fractal, completed: bool):
+        new_row = {
+            "index": self.df_swing.height,
+            "direction": direction.value,
+            "start_index": fractal.index,
+            "end_index": fractal.index,
+            "high_price": fractal.high_price,
+            "low_price": fractal.low_price,
+            "is_completed": completed,
+        }
+        self.df_swing = self.df_swing.vstack(pl.DataFrame([new_row], schema=self.df_swing.schema))
 
-    return result
+    def _replace_active_swing(self, swing: Swing):
+        if self.df_swing.is_empty():
+            return
+        self.df_swing = self.df_swing.slice(0, self.df_swing.height - 1)
+        self._append_swing(swing.direction,
+                           type('F', (), {'index': swing.start_index, 'high_price': swing.high_price, 'low_price': swing.low_price})(),
+                           swing.is_completed)
+        # 更新字段
+        last_idx = self.df_swing.height - 1
+        self.df_swing = self.df_swing.with_columns([
+            pl.when(pl.col("index") == last_idx).then(swing.end_index).otherwise(pl.col("end_index")).alias("end_index"),
+            pl.when(pl.col("index") == last_idx).then(swing.high_price).otherwise(pl.col("high_price")).alias("high_price"),
+            pl.when(pl.col("index") == last_idx).then(swing.low_price).otherwise(pl.col("low_price")).alias("low_price"),
+            pl.when(pl.col("index") == last_idx).then(swing.is_completed).otherwise(pl.col("is_completed")).alias("is_completed"),
+        ])
 
-fig = make_subplots(
-    rows=2, cols=1,
-    shared_xaxes=True,
-    row_heights=[0.7, 0.3],
-    vertical_spacing=0.03,
-    specs=[[{"secondary_y": False}], [{"secondary_y": True}]]
-)
-# K 线
-fig.add_trace(go.Candlestick(
-    x=df_pandas['datetime'],
-    open=df_pandas['open_price'],
-    high=df_pandas['high_price'],
-    low=df_pandas['low_price'],
-    close=df_pandas['close_price'],
-    name='OHLC'
-), row=1, col=1)
+    def get_active_swing(self) -> Optional[Swing]:
+        if self.df_swing.is_empty():
+            return None
+        row = self.df_swing.row(-1, named=True)
+        if row["is_completed"]:
+            return None
+        return Swing(**row)
 
+    def _get_last_completed_swing(self) -> Optional[Swing]:
+        if self.df_swing.height < 2:
+            return None
+        for i in range(self.df_swing.height - 2, -1, -1):
+            row = self.df_swing.row(i, named=True)
+            if row["is_completed"]:
+                return Swing(**row)
+        return None
 
-fig.add_trace(go.Bar(
-    x=df_pandas['datetime'],
-    y=df_pandas['volume'],
-    name='Volume',
-), row=2, col=1, secondary_y=False)
+    def _get_fractal_at(self, index: int) -> Optional[Fractal]:
+        for i in range(len(self.cbars) - 2):
+            f = Fractal(self.cbars[i], self.cbars[i+1], self.cbars[i+2])
+            if f.valid() != FractalType.NONE and f.index == index:
+                return f
+        return None
 
-# 副图：持仓量折线（右Y轴）
-fig.add_trace(go.Scatter(
-    x=df_pandas['datetime'],
-    y=df_pandas['open_interest'],
-    mode='lines',
-    name='Open Interest',
-    line=dict(color='orange', width=1)
-), row=2, col=1, secondary_y=True)
+    def get_all_swings(self) -> List[Swing]:
+        return [Swing(**row) for row in self.df_swing.iter_rows(named=True)]
 
-holidays = [d for d in cc.get_holidays(df_pandas["datetime"].min(),df_pandas["datetime"].max())]
-# display(holidays)
-rangebreaks = generate_cn_futures_rangebreaks_fixed(
-    df_pandas,
-    datetime_col="datetime",
-    holidays=holidays # 可选
-)
-
-
-fig.update_layout(
-    title='Pulao Chart',
-    height=900,
-    hovermode='x unified',    # X轴悬停联动虚线
-    xaxis_rangeslider_visible=False,   # 滑块可以放到底部子图
-    hoversubplots='axis'
-)
-
-fig.update_xaxes(
-    rangebreaks=rangebreaks,
-    showgrid=False,
-    showspikes=True,              # 启用每行 spike
-    spikemode="across",           # 横跨子图宽度
-    spikesnap="cursor",           # 跟随鼠标
-)
-
-fig.update_yaxes(
-    showgrid=False,
-    showspikes=True,              # 启用每行 spike
-    spikemode="across",           # 横跨子图宽度
-    spikesnap="cursor",           # 跟随鼠标
-)
-
-# 如果你想把 rangeslider 放在成交量下面（推荐）
-fig.update_xaxes(rangeslider_visible=True, row=2, col=1)
-fig.update_traces(xaxis='x')
-fig.show()
-# 趋势测试
-#trend = trend_manager.get_trend()
-#display(trend)
-#trend_manager.get_swing_list(trend)
-
-#df = swing_manager.df_cbar.with_row_index("_idx_")
-#index = df.filter((pl.col("swing_point_type") != "") & (pl.col("swing_point_level") == 2)).tail(1).select(pl.col("index")).item()
-#df.slice(index)
+    def get_completed_swings(self) -> List[Swing]:
+        return [s for s in self.get_all_swings() if s.is_completed]

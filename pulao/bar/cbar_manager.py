@@ -234,7 +234,7 @@ class CBarManager(Observable):
         fractal = Fractal(
             left=CBar(**rows[0]), middle=CBar(**rows[1]), right=CBar(**rows[2])
         )
-        return fractal if fractal.valid() else None
+        return fractal if fractal.fractal_type() != FractalType.NONE else None
 
     def prev_fractal(self, index: int) -> Fractal | None:
         prev_fractal_index = self.df_cbar.filter(
