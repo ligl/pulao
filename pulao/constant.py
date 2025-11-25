@@ -54,35 +54,21 @@ class SwingPointType(BaseEnum):
     """
     波段高低点
     """
-
     HIGH = 1
     LOW = -1
     NONE = 0
-
-class SwingPointLevel(BaseEnum):
-    """
-    波段高低点级别
-    """
-
-    MAJOR = 2 # 本周期主要级别
-    MINOR = 1 # 本周期次要级别
-    NONE = 0 # 不是波段点
-
 
 class SwingDirection(BaseEnum):
     """
     波段方向
     """
-
     UP = 1
     DOWN = -1
-
 
 class TrendDirection(BaseEnum):
     """
     趋势方向
     """
-
     UP = 1
     DOWN = -1
     RANGE = 2
@@ -92,7 +78,6 @@ class DecisionAction(BaseEnum):
     """
     决策行为：多开(buy)、多平(sell)、空开(short)、空平(cover)、等待(wait)
     """
-
     BUY = "buy"
     SELL = "sell"
     SHORT = "short"
@@ -104,7 +89,6 @@ class KeyZoneType(BaseEnum):
     """
     KeyZone 的类别或功能类型，比如 support、resistance、oscillation 等，决定 KeyZone 在分析和逻辑上的行为
     """
-
     SUPPORT = "support"  # 支撑
     RESISTANCE = "resistance"  # 阻力
     COUNTER_PRESSURE = "counter_pressure"  # 反压位
@@ -120,7 +104,6 @@ class KeyZoneOrigin(BaseEnum):
     """
     KeyZone 的来源或生成逻辑，比如 from_trend、from_swing、from_manual，帮助追踪这个区域是通过哪种方式产生的（便于管理、更新或过滤）
     """
-
     MAJOR_SWING = "major_swing"  # 主波段
     SECONDARY_SWING = "secondary_swing"  # 次级波段
     TREND_HH = "trend_hh"  # 结构高点 HH
@@ -138,7 +121,6 @@ class EventType(BaseEnum):
     """
     Event事件类型
     """
-
     SBAR_CREATED = "bar.created"
     CBAR_CREATED = "cbar.created"
     SWING_CHANGED = "swing.changed"

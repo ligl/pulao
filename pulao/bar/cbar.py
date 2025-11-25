@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from pulao.constant import SwingPointType, SwingPointLevel
+from pulao.constant import SwingPointType
 
 
 @dataclass
@@ -14,16 +14,10 @@ class CBar:
     low_price: float = 0
 
     swing_point_type: SwingPointType = SwingPointType.NONE
-    swing_point_level: SwingPointLevel = SwingPointLevel.NONE
-    swing_point_level_origin: SwingPointLevel = SwingPointLevel.NONE
 
     def __post_init__(self):
         if isinstance(self.swing_point_type, int):
             self.swing_point_type = SwingPointType(self.swing_point_type)
-        if isinstance(self.swing_point_level, int):
-            self.swing_point_level = SwingPointLevel(self.swing_point_level)
-        if isinstance(self.swing_point_level_origin, int):
-            self.swing_point_level_origin = SwingPointLevel(self.swing_point_level_origin)
 
     @property
     def length(self):

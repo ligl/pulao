@@ -1,7 +1,5 @@
 from dataclasses import dataclass
 
-from pulao.constant import SwingPointType, SwingPointLevel
-
 from datetime import datetime as Datetime
 
 @dataclass
@@ -69,14 +67,3 @@ class SBar:
         elif self.close_price < self.open_price:
             return -1
         return 0
-
-    @property
-    def is_swing_high(self) -> bool:
-        return self.swing_point_type == SwingPointType.HIGH
-
-    @property
-    def is_swing_low(self) -> bool:
-        return self.swing_point_type == SwingPointType.LOW
-
-    def update_swing_point(self, sp: SwingPointType) -> None:
-        self.swing_point_type = sp

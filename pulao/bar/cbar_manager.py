@@ -4,7 +4,6 @@ from typing import Any, List
 
 from pulao.constant import (
     SwingPointType,
-    SwingPointLevel,
     EventType,
     SwingDirection,
 )
@@ -12,6 +11,8 @@ from pulao.events import Observable
 from pulao.bar import SBar, SBarManager, CBar, Fractal
 
 import polars as pl
+
+from pulao.logging import logger
 
 
 class CBarManager(Observable):
@@ -24,8 +25,6 @@ class CBarManager(Observable):
             "high_price": pl.Float32,
             "low_price": pl.Float32,
             "swing_point_type": pl.Int8,  # 波段高低点标记
-            "swing_point_level": pl.Int8,  # 波段高低点级别（调整后的，正式用）
-            "swing_point_level_origin": pl.Int8,  # 波段高低点级别（原始级别）
         }
         self.df_cbar: pl.DataFrame = pl.DataFrame(schema=schema)  # 包含合并后的k线列表
         self.sbar_manager: SBarManager = sbar_manager
@@ -168,8 +167,6 @@ class CBarManager(Observable):
             "high_price": high_price,
             "low_price": low_price,
             "swing_point_type": SwingPointType.NONE.value,
-            "swing_point_level": SwingPointLevel.NONE.value,
-            "swing_point_level_origin": SwingPointLevel.NONE.value,
         }
         self.df_cbar = self.df_cbar.vstack(
             pl.DataFrame([new_cbar], schema=self.df_cbar.schema)
@@ -185,35 +182,25 @@ class CBarManager(Observable):
 
         # 分形判断
         # 取最近的3条bar，判断是否为分形
-        last_bar_df = self.df_cbar.tail(3)
-        if last_bar_df.height != 3:  # k线数量不够，不符合分形判断条数要求
+        last_bar_list = self.get_last_cbar(3)
+        if last_bar_list is None or len(last_bar_list) != 3:  # k线数量不够，不符合分形判断条数要求
             return
 
-        left_bar = CBar(**last_bar_df.row(0, named=True))
-        middle_bar = CBar(**last_bar_df.row(1, named=True))
-        right_bar = CBar(**last_bar_df.row(2, named=True))
+        left_bar, middle_bar, right_bar = last_bar_list
 
         swing_point_type = Fractal.is_fractal(left_bar, middle_bar, right_bar)
 
         if swing_point_type != SwingPointType.NONE:  # 是分形
-            swing_point_level_origin = SwingPointLevel.MAJOR  # 默认分形为本级别
-            # 是分形，更新分形标识和分形级别，更新cbar_df数据源
+            # 是分形，更新分形标识，更新cbar_df数据源
             self.df_cbar = self.df_cbar.with_columns(
                 [
                     pl.when(pl.col("index") == middle_bar.index)
                     .then(pl.lit(swing_point_type.value))
                     .otherwise(pl.col("swing_point_type"))
                     .alias("swing_point_type"),
-                    pl.when(pl.col("index") == middle_bar.index)
-                    .then(pl.lit(swing_point_level_origin.value))
-                    .otherwise(pl.col("swing_point_level"))
-                    .alias("swing_point_level"),
-                    pl.when(pl.col("index") == middle_bar.index)
-                    .then(pl.lit(swing_point_level_origin.value))
-                    .otherwise(pl.col("swing_point_level_origin"))
-                    .alias("swing_point_level_origin"),
                 ]
             )
+            logger.debug("找到分形",{"df_cbar_height":self.df_cbar.height})
 
     def get_last_cbar(self, count:int = None) -> List[CBar] | CBar | None:
         if count is None:

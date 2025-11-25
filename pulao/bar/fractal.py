@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Tuple
 
 from pulao.bar import CBar
-from pulao.constant import FractalType, SwingPointType
+from pulao.constant import FractalType
 
 
 @dataclass
@@ -77,9 +77,10 @@ class Fractal:
     def is_fractal(cls, left: CBar, middle: CBar, right: CBar) -> FractalType:
         if left is None or middle is None or right is None:
             return FractalType.NONE
+
         if left.high_price < middle.high_price > right.high_price:  # 顶分形
             return FractalType.TOP
         elif left.low_price > middle.low_price < right.low_price:  # 底分形
             return FractalType.BOTTOM
-        else:  # 不是分形
-            return FractalType.NONE
+
+        return FractalType.NONE

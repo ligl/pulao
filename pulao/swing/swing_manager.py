@@ -1,18 +1,15 @@
-from typing import Any, List
-from pulao.events import Observable
+from typing import Any
+
 import polars as pl
 
-from pulao.swing import Swing
+from pulao.events import Observable
 from .swing import Swing
+from ..bar import CBarManager, Fractal
 from ..constant import (
     EventType,
     SwingDirection,
-    SwingPointType,
-    SwingPointLevel,
-    Const,
     FractalType,
 )
-from ..bar import CBarManager, CBar, Fractal
 from ..logging import logger
 
 
@@ -74,6 +71,9 @@ class SwingManager(Observable):
         if fractal_type == FractalType.NONE:
             if self.df_swing.is_empty():  # 不是分形，且已有波段，延长active swing
                 # 不是分形，又没有波段，不符合条件，丢弃
+                logger.debug(
+                    "情况1，最后3根bar组成不了分形，又没有波段，不符合条件，丢弃"
+                )
                 return
             active_swing = self.get_active_swing()
             active_swing.end_index = curr_fractal.end_index
@@ -90,6 +90,7 @@ class SwingManager(Observable):
                 low_price=active_swing.low_price,
                 is_completed=active_swing.is_completed,
             )
+            logger.debug("情况1，最后3根bar组成不了分形，延续现有波段")
             return  # 不是分形，延续现有波段
 
         # 情况2，最后3根bar能组成分形
@@ -105,6 +106,7 @@ class SwingManager(Observable):
                 low_price=curr_fractal.low_price,
                 is_completed=False,
             )
+            logger.debug("情况2，最后3根bar能组成分形。第一次构建，直接添加。")
             return
 
         # 2). 已经有波段，判断是延续还是终结波段
@@ -124,10 +126,18 @@ class SwingManager(Observable):
             # 下降波段中出顶分形或上升波段中出现底分形，说明波段在延续
             active_swing.end_index = curr_fractal.index  # 波段完成时
             active_swing.is_completed = True
+            logger.debug(
+                "情况2，最后3根bar能组成分形。且完结波段。",
+                {"active_swing": active_swing},
+            )
         else:
             # 不能组成波段，即波段延续延续
             active_swing.end_index = curr_fractal.end_index  # 波段未完成，记录最新k
             active_swing.is_completed = False
+            logger.debug(
+                "情况2，最后3根bar能组成分形。且与之前波段同向，延续波段。",
+                {"active_swing": active_swing},
+            )
 
         self._update_active_swing(
             index=active_swing.index,

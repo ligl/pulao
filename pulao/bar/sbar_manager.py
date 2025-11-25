@@ -7,7 +7,7 @@ from pulao.indicator import IndicatorManager, EmaIndicator
 from .sbar import SBar
 import polars as pl
 
-from ..constant import EventType, SwingPointType, SwingPointLevel
+from ..constant import EventType
 
 
 class SBarManager(Observable):
