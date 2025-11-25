@@ -57,6 +57,10 @@ class SwingDirection(BaseEnum):
     UP = 1
     DOWN = -1
 
+    @property
+    def opposite(self):
+        return SwingDirection.DOWN if self == SwingDirection.UP else SwingDirection.UP
+
 class TrendDirection(BaseEnum):
     """
     趋势方向

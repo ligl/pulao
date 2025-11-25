@@ -47,18 +47,15 @@ class SwingManager(Observable):
         # 2. 分形之间不能重叠
         # 3. 被确认的波段有可能被打破，如上升波段成立后，在顶分形没有向下发展出下降笔，而是又转头向上，创出新高形成新的顶分形，则之前的顶分形作废，换成新的
         # 执行流程：
-        # 1. 新的一条cbar被创建
-        # 2. 取最后3条cbar做分形判断
-        # 3. 如果构成分形
-        # 3.1 如果是第一条swing，此分形即是swing起点，直接添加到df_swing
-        # 3.2 如果不是第一条swing，此时就是尚未完成，正在进行的波段active swing
-        # 3.2.1 判断分形的类型与active swing的方向关系
-        # 3.2.2 如果在下降波段中出现顶分形或上升波段中出现底分形，说明波段延续
+        # 1. 接收到一条cbar被创建
+        # 2. 情况1，未创建过波段，且最后3根bar组成不了分形
+        # 3. 情况2，未创建过波段，且最后3根bar能组成分形，说明第一次创建波段起点
+        # 4. 情况3，已经有波段，判断是延续还是终结波段
         #
         #
         cbar_list = self.cbar_manager.get_last_cbar(3)
         if cbar_list is None or len(cbar_list) != 3:
-            logger.debug(
+            logger.warning(
                 "用于组成分形的cbar数量不够",
                 cbar_count=len(cbar_list) if cbar_list is not None else 0,
             )
@@ -69,16 +66,15 @@ class SwingManager(Observable):
         curr_fractal = Fractal(left=left_bar, middle=middle_bar, right=right_bar)
         fractal_type = curr_fractal.valid()
         # 情况1，未创建过波段，且最后3根bar组成不了分形
-        if fractal_type == FractalType.NONE  and self.df_swing.is_empty():
-            # 不是分形，又没有波段，不符合条件，丢弃
-            logger.debug(
-                "情况1，最后3根bar组成不了分形，又没有波段，不符合条件，丢弃"
-            )
-            return
-
         # 情况2，未创建过波段，且最后3根bar能组成分形，说明第一次创建波段起点
-        # 第一次构建，直接添加
+        # 首次波段创建
         if self.df_swing.is_empty():
+            if fractal_type == FractalType.NONE:
+                # 不是分形，又没有波段，不符合条件，丢弃
+                logger.info(
+                    "情况1，最后3根bar组成不了分形，又没有波段，不符合条件，丢弃"
+                )
+                return
             self._append_swing(
                 direction=SwingDirection.DOWN
                 if fractal_type == FractalType.TOP
@@ -91,8 +87,7 @@ class SwingManager(Observable):
             )
             logger.debug(
                 "情况2，最后3根bar能组成分形。第一次构建，直接添加。",
-                fractal=curr_fractal,
-                df_swing_height=self.df_swing.height,
+                fractal=curr_fractal
             )
             return
 
@@ -103,7 +98,7 @@ class SwingManager(Observable):
             # 说明当前波段已经完成，需要以终止点为新的起点构建active_swing
             last_swing_end_fractal = self.cbar_manager.get_fractal(last_swing.end_index)
             if not last_swing_end_fractal:
-                raise AssertionError("此处不应该被执行，如果被执行，说明数据源错误。")
+                raise AssertionError("数据源异常，无法获取last_swing_end_fractal")
 
             active_swing = Swing(
                 index=last_swing.index + 1,
@@ -127,6 +122,7 @@ class SwingManager(Observable):
             active_swing.start_index
         )
 
+        # 更新 active swing 价格
         active_swing.high_price = max(active_swing.high_price, curr_fractal.high_price)
         active_swing.low_price = min(active_swing.low_price, curr_fractal.low_price)
 
@@ -140,7 +136,7 @@ class SwingManager(Observable):
             active_swing.end_index = curr_fractal.index  # 波段完成时
             active_swing.is_completed = True
             logger.debug(
-                "情况2，最后3根bar能组成分形。且完结波段。",
+                "情况3，最后3根bar能组成分形。且完结波段。",
                 active_swing=active_swing,
                 df_swing_height=self.df_swing.height,
             )
@@ -149,7 +145,7 @@ class SwingManager(Observable):
             active_swing.end_index = curr_fractal.end_index  # 波段未完成，记录最新k
             active_swing.is_completed = False
             logger.debug(
-                "情况2，最后3根bar能组成分形。且与之前波段同向，延续波段。",
+                "情况3，最后3根bar能组成分形。且与之前波段同向，延续波段。",
                 active_swing=active_swing,
                 df_swing_height=self.df_swing.height,
             )
@@ -284,8 +280,10 @@ class SwingManager(Observable):
         :param index: 指定index所在的波段
         :return: Swing | None
         """
+        if index <= 0 or index >= self.df_swing.height:
+            return None
+        return Swing(**self.df_swing.row(index - 1, named=True))
 
-        raise NotImplementedError("未实现")
 
     def prev_same_swing(self, index: int) -> Swing | None:
         """
@@ -293,8 +291,7 @@ class SwingManager(Observable):
         :param index: 指定index所在的波段
         :return: Swing | None
         """
-
-        raise NotImplementedError("未实现")
+        return self.prev_opposite_swing(index - 1)
 
     def next_opposite_swing(self, index: int) -> Swing | None:
         """
@@ -302,7 +299,9 @@ class SwingManager(Observable):
         :param index: 指定index所在的波段
         :return: Swing | None
         """
-        raise NotImplementedError("未实现")
+        if index < 0 or index >= self.df_swing.height - 1:
+            return None
+        return Swing(**self.df_swing.row(index + 1, named=True))
 
     def next_same_swing(self, index: int) -> Swing | None:
         """
@@ -310,7 +309,7 @@ class SwingManager(Observable):
         :param index: 指定index所在的波段
         :return: Swing | None
         """
-        raise NotImplementedError("未实现")
+        return self.next_opposite_swing(index + 1)
 
     def prev_swing(self, index: int) -> Swing | None:
         """
