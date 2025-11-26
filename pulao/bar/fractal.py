@@ -23,25 +23,39 @@ class Fractal:
         return low, high
 
     @property
-    def index(self) -> int:
+    def id(self) -> int:
         """
         middle.index
         """
-        return self.middle.index
+        return self.middle.id
 
     @property
-    def start_index(self) ->int:
+    def cbar_start_id(self) ->int:
         """
         left.index
         """
-        return self.left.index
+        return self.left.id
 
     @property
-    def end_index(self) ->int:
+    def cbar_end_id(self) ->int:
         """
         right.index
         """
-        return self.right.index
+        return self.right.id
+
+    @property
+    def sbar_start_id(self) -> int:
+        """
+        left.start_index
+        """
+        return self.left.start_id
+
+    @property
+    def sbar_end_id(self) -> int:
+        """
+        right.end_index
+        """
+        return self.right.end_id
 
     @property
     def high_price(self) -> float:

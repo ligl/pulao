@@ -52,7 +52,7 @@ for idx, row in enumerate(df.iter_rows()):
         open_interest=open_interest,
         turnover=money,
     )
-    sbar = SBar(index= len(sbar_list), symbol=bar.symbol, exchange=bar.exchange.value, interval=bar.interval.value,datetime=datetime,turnover=money,open_price=open,close_price=close,high_price=high,low_price=low,volume=volume)
+    sbar = SBar(id= len(sbar_list), symbol=bar.symbol, exchange=bar.exchange.value, interval=bar.interval.value, datetime=datetime, turnover=money, open_price=open, close_price=close, high_price=high, low_price=low, volume=volume)
 
     sbar_list.append(sbar)
 # 模拟行情数据接收

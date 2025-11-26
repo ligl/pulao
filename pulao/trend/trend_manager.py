@@ -56,12 +56,12 @@ class TrendManager(Observable):
                 return None
             if swing_current.is_completed:
                 break
-            swing_current = self.swing_manager.prev_swing(swing_current.index) # 查前一个波段
+            swing_current = self.swing_manager.prev_swing(swing_current.id) # 查前一个波段
 
-        swing_prev_1 = self.swing_manager.prev_swing(swing_current.index)
+        swing_prev_1 = self.swing_manager.prev_swing(swing_current.id)
         if swing_prev_1 is None:
             return None
-        swing_prev_2 = self.swing_manager.prev_swing(swing_prev_1.index)
+        swing_prev_2 = self.swing_manager.prev_swing(swing_prev_1.id)
         if swing_prev_2 is None:
             return None
 
@@ -74,8 +74,8 @@ class TrendManager(Observable):
         else: # 横向区间
             trend.direction = TrendDirection.RANGE
 
-        trend.start_index = swing_prev_2.index
-        trend.end_index = swing_current.index
+        trend.start_index = swing_prev_2.id
+        trend.end_index = swing_current.id
         trend.start_index_bar = swing_prev_2.start_index_bar
         trend.end_index_bar = swing_current.end_index_bar
 
@@ -88,26 +88,26 @@ class TrendManager(Observable):
         tmp_swing_next_1 = swing_prev_2
         tmp_swing_next_2 = swing_prev_1
         while True:
-            tmp_swing_current = self.swing_manager.prev_swing(tmp_swing_next_1.index)
+            tmp_swing_current = self.swing_manager.prev_swing(tmp_swing_next_1.id)
             if tmp_swing_current is None:
                 break
             if trend.direction == TrendDirection.UP:
                 if tmp_swing_current.high_price < tmp_swing_next_2.high_price and tmp_swing_current.low_price < tmp_swing_next_2.low_price: # 向前延伸
-                    trend.start_index = tmp_swing_current.index
+                    trend.start_index = tmp_swing_current.id
                     trend.start_index_bar = tmp_swing_current.start_index_bar
                     trend.low_price = min(trend.low_price, tmp_swing_current.low_price)
                 else: # 终结-起始位置已确定
-                    trend.start_index = tmp_swing_next_1.index
+                    trend.start_index = tmp_swing_next_1.id
                     trend.start_index_bar = tmp_swing_next_1.start_index_bar
                     trend.low_price = min(trend.low_price, tmp_swing_next_1.low_price)
                     break
             elif trend.direction == TrendDirection.DOWN:
                 if tmp_swing_current.high_price > tmp_swing_next_2.high_price and tmp_swing_current.low_price > tmp_swing_next_2.low_price: # 向前延伸
-                    trend.start_index = tmp_swing_current.index
+                    trend.start_index = tmp_swing_current.id
                     trend.start_index_bar = tmp_swing_current.start_index_bar
                     trend.high_price = max(trend.high_price, tmp_swing_current.high_price)
                 else: # 终结-起始位置已确定
-                    trend.start_index = tmp_swing_next_1.index
+                    trend.start_index = tmp_swing_next_1.id
                     trend.start_index_bar = tmp_swing_next_1.start_index_bar
                     trend.high_price = max(trend.high_price, tmp_swing_next_1.high_price)
                     break
@@ -120,7 +120,7 @@ class TrendManager(Observable):
                 # 当前波段的范围是否有原有区间重叠，有重叠视为区间延续
                 overlap = max(tmp_swing_current.low_price, trend.low_price) <= min(tmp_swing_current.high_price, trend.high_price)
                 if overlap:
-                    trend.start_index = tmp_swing_current.start_index # 调整开始位置
+                    trend.start_index = tmp_swing_current.start_id # 调整开始位置
                     trend.start_index_bar = tmp_swing_current.start_index_bar
                     # TODO 区间价格如何调整？
                 else:

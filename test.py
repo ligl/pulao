@@ -108,7 +108,7 @@ class ChanBiDetector:
             raise ValueError("bar 必须包含 index, open, high, low, close")
 
         new_bar = Bar(
-            index=bar.index,
+            index=bar.id,
             open=bar.open,
             high=bar.high,
             low=bar.low,

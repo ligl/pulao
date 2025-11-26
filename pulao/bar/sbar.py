@@ -8,7 +8,7 @@ class SBar:
     SuperBar , BarData扩展
     """
 
-    index: int # 在SBarManager数据源中的索引
+    id: int = None # 在SBarManager数据源中的索引，类似数据库中的自增id
 
     symbol: str = None
     exchange: str = None
@@ -25,6 +25,8 @@ class SBar:
 
     ema_short: float = 0
     ema_long: float = 0
+
+    created_at: Datetime = None
 
     @property
     def body(self) -> float:

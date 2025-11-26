@@ -3,25 +3,22 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from ..constant import FractalType
-
+from datetime import datetime as Datetime
 
 @dataclass
 class CBar:
-    index: int  # cbar_df index
-    start_index: int = 0  # sbar_df index
-    end_index: int = 0
+    id: int = None  # cbar_df primary key 类似数据库中的自增id
+    start_id: int = None  # sbar_df id
+    end_id: int = None
     high_price: float = 0
     low_price: float = 0
+    created_at: Datetime = None # 创建时间
 
     fractal_type: FractalType = FractalType.NONE
 
     def __post_init__(self):
         if isinstance(self.fractal_type, int):
             self.fractal_type = FractalType(self.fractal_type)
-
-    @property
-    def length(self):
-        return self.end_index - self.start_index + 1
 
     @property
     def distance(self):

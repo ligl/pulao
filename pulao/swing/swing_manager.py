@@ -2,7 +2,7 @@ from dataclasses import replace
 from typing import Any
 
 import polars as pl
-from pyqtgraph.examples.colorMapsLinearized import previous
+from datetime import datetime as Datetime
 
 from pulao.events import Observable
 from .swing import Swing
@@ -13,23 +13,26 @@ from ..constant import (
     FractalType,
 )
 from ..logging import logger
+from ..utils import IDGenerator
 
 
 class SwingManager(Observable):
     def __init__(self, cbar_manager: CBarManager):
         super().__init__()
         schema = {
-            "index": pl.UInt32,
-            "start_index": pl.UInt32,
-            "end_index": pl.UInt32,  # 如果是active swing，end_index = 最新k线
+            "id": pl.UInt64,
+            "start_id": pl.UInt64, # df_cbar id
+            "end_id": pl.UInt64,  # 如果是active swing，end_id = 最新k线
             "high_price": pl.Float32,
             "low_price": pl.Float32,
             "direction": pl.Int8,
             "is_completed": pl.Boolean,  # 还未被确认的波段，即正在进行中的波段，在实时行情中尚未被确认
+            "created_at": pl.Datetime("ms"),
         }
         self.df_swing: pl.DataFrame = pl.DataFrame(schema=schema)
         self.cbar_manager: CBarManager = cbar_manager
         self.cbar_manager.subscribe(self._on_cbar_created)
+        self.id_gen = IDGenerator()
 
     def _on_cbar_created(self, event: EventType, payload: Any):
         # 波段检测识别
@@ -65,8 +68,9 @@ class SwingManager(Observable):
 
         #
         # cbar会随着sbar变化，每收到一个sbar，cbar都要做包含处理，结果是cbar可能会减少，对于已经构建的swing可能就会包含脏数据，需要特殊处理，
-        # cbar并不能用index值判断是不是变化了（索引值只是保证在df_cbar中不会重复，但有可能不是同一个cbar）,唯一确定cbar的是[start_index,end_index]，这两个值一样，就说明是同一个cbar
-        # 而波段中又只记录了cbar index，并未记录sbar index，这样就出问题了，从那个变化后的cbar开始之后的数据就要重算
+        # cbar并不能用id值判断是不是变化了（索引值只是保证在df_cbar中不会重复，但有可能不是同一个cbar）,唯一确定cbar的是[start_id,end_id]，这两个值一样，就说明是同一个cbar
+        # 而波段中又只记录了cbar id，并未记录sbar id，这样就出问题了，从那个变化后的cbar开始之后的数据就要重算
+        # TODO
 
         left_bar, middle_bar, right_bar = cbar_list
 
@@ -88,8 +92,8 @@ class SwingManager(Observable):
                 direction=SwingDirection.DOWN
                 if fractal_type == FractalType.TOP
                 else SwingDirection.UP,
-                start_index=curr_fractal.index,
-                end_index=curr_fractal.end_index,
+                start_id=curr_fractal.id,
+                end_id=curr_fractal.cbar_end_id,
                 high_price=curr_fractal.high_price,
                 low_price=curr_fractal.low_price,
                 is_completed=False,
@@ -100,13 +104,23 @@ class SwingManager(Observable):
             )
             return
 
+        # 判断波段有没有脏数据
+        last_swing = self.get_swing() # 获取最新的一个波段，不区分是否完成
+        # 检查是否需要追溯波段，删除脏cbar后重新计算
+        # if last_swing.end_id != left_bar.id or last_swing.end_id != middle_bar.id:
+        #     # 需要追溯
+        #     logger.debug("波段需要追溯", last_swing=last_swing, curr_fractal=curr_fractal)
+        #     raise AssertionError("波段需要追溯")
+
+
         # 情况3，已经有完成的波段，判断是延续还是终结波段
         prev_swing = self.get_swing(is_completed=True)
 
         active_swing = self.get_active_swing()
+
         if active_swing is None and prev_swing:
             # 说明当前波段已经完成，需要以终止点为新的起点构建active_swing
-            prev_swing_end_fractal = self.cbar_manager.get_fractal(prev_swing.end_index)
+            prev_swing_end_fractal = self.cbar_manager.get_fractal(prev_swing.end_id)
             if not prev_swing_end_fractal:
                 logger.error(
                     "数据源异常，前一个波段终点分形异常", prev_swing=prev_swing
@@ -114,18 +128,17 @@ class SwingManager(Observable):
                 raise AssertionError("数据源异常，前一个波段终点分形异常")
 
             active_swing = Swing(
-                index=prev_swing.index + 1,
                 direction=prev_swing.opposite_direction,
-                start_index=prev_swing_end_fractal.index,
-                end_index=prev_swing_end_fractal.end_index,  # 此时，波段处于未完成状态，end_index为最新bar的索引，并不是分形顶底bar
+                start_id=prev_swing_end_fractal.id,
+                end_id=prev_swing_end_fractal.cbar_end_id,  # 此时，波段处于未完成状态，end_id为最新bar的索引，并不是分形顶底bar
                 high_price=prev_swing_end_fractal.high_price,
                 low_price=prev_swing_end_fractal.low_price,
                 is_completed=False,
             )
             self._append_swing(
                 direction=active_swing.direction,
-                start_index=active_swing.start_index,
-                end_index=active_swing.end_index,
+                start_id=active_swing.start_id,
+                end_id=active_swing.end_id,
                 high_price=active_swing.high_price,
                 low_price=active_swing.low_price,
                 is_completed=active_swing.is_completed,
@@ -133,7 +146,7 @@ class SwingManager(Observable):
             return
 
         active_swing_start_fractal = self.cbar_manager.get_fractal(
-            active_swing.start_index
+            active_swing.start_id
         )
         # 更新 active swing 价格
         active_swing.high_price = max(active_swing.high_price, curr_fractal.high_price)
@@ -146,14 +159,14 @@ class SwingManager(Observable):
             prev_swing=prev_swing,
         ):  # 两个分形可以组成一个波段
             # 下降波段中出顶分形或上升波段中出现底分形，说明波段在延续
-            active_swing.end_index = curr_fractal.index  # 波段完成时
+            active_swing.end_id = curr_fractal.id  # 波段完成时
             active_swing.is_completed = True
 
             self._update_active_swing(
-                index=active_swing.index,
+                id=active_swing.id,
                 direction=active_swing.direction,
-                start_index=active_swing.start_index,
-                end_index=active_swing.end_index,
+                start_id=active_swing.start_id,
+                end_id=active_swing.end_id,
                 high_price=active_swing.high_price,
                 low_price=active_swing.low_price,
                 is_completed=active_swing.is_completed,
@@ -164,14 +177,14 @@ class SwingManager(Observable):
             )
         else:
             # 不能组成波段，即波段延续延续
-            active_swing.end_index = curr_fractal.end_index  # 波段未完成，记录最新k
+            active_swing.end_id = curr_fractal.cbar_end_id  # 波段未完成，记录最新k
             active_swing.is_completed = False
 
             self._update_active_swing(
-                index=active_swing.index,
+                id=active_swing.id,
                 direction=active_swing.direction,
-                start_index=active_swing.start_index,
-                end_index=active_swing.end_index,
+                start_id=active_swing.start_id,
+                end_id=active_swing.end_id,
                 high_price=active_swing.high_price,
                 low_price=active_swing.low_price,
                 is_completed=active_swing.is_completed,
@@ -192,14 +205,14 @@ class SwingManager(Observable):
                 new_swing = replace(
                     prev_swing,
                     high_price=active_swing.high_price,
-                    end_index=active_swing.end_index,
+                    end_id=active_swing.end_id,
                     is_completed=active_swing.is_completed,
                 )
 
                 self._append_swing(
                     direction=new_swing.direction,
-                    start_index=new_swing.start_index,
-                    end_index=new_swing.end_index,
+                    start_id=new_swing.start_id,
+                    end_id=new_swing.end_id,
                     high_price=new_swing.high_price,
                     low_price=new_swing.low_price,
                     is_completed=new_swing.is_completed,
@@ -218,14 +231,14 @@ class SwingManager(Observable):
                 new_swing = replace(
                     prev_swing,
                     low_price=active_swing.low_price,
-                    end_index=active_swing.end_index,
+                    end_id=active_swing.end_id,
                     is_completed=active_swing.is_completed,
                 )
 
                 self._append_swing(
                     direction=new_swing.direction,
-                    start_index=new_swing.start_index,
-                    end_index=new_swing.end_index,
+                    start_id=new_swing.start_id,
+                    end_id=new_swing.end_id,
                     high_price=new_swing.high_price,
                     low_price=new_swing.low_price,
                     is_completed=new_swing.is_completed,
@@ -240,24 +253,25 @@ class SwingManager(Observable):
     def _append_swing(
         self,
         direction: SwingDirection,
-        start_index: int,
-        end_index: int,
+        start_id: int,
+        end_id: int,
         high_price: float,
         low_price: float,
-        is_completed: bool,
+        is_completed: bool
     ):
         new_swing = {
-            "index": self.df_swing.height,
+            "id": self.id_gen.get_id(),
             "direction": direction.value,
-            "start_index": start_index,
-            "end_index": end_index,
+            "start_id": start_id,
+            "end_id": end_id,
             "high_price": high_price,
             "low_price": low_price,
             "is_completed": is_completed,
+            "created_at": Datetime.now(),
         }
         if is_completed:
-            start_fractal = self.cbar_manager.get_fractal(start_index)
-            end_fractal = self.cbar_manager.get_fractal(end_index)
+            start_fractal = self.cbar_manager.get_fractal(start_id)
+            end_fractal = self.cbar_manager.get_fractal(end_id)
             if not start_fractal or not end_fractal:
                 logger.error(
                     "波段断定无效",
@@ -272,21 +286,24 @@ class SwingManager(Observable):
 
     def _update_active_swing(
         self,
-        index: int,
+        id: int,
         direction: SwingDirection,
-        start_index: int,
-        end_index: int,
+        start_id: int,
+        end_id: int,
         high_price: float,
         low_price: float,
         is_completed: bool,
     ):
-        # 如果最新的波段未完成，才需要删除，否则直接插入
+        """
+        更新逻辑：先删除旧数据，再添加新数据，每条数据的id都不同
+        """
+        # 先删除再添加
         if self.df_swing.height > 0:
             self.df_swing = self.df_swing.slice(
                 0, self.df_swing.height - 1
             )  # 删除原active swing，即最后一行
         self._append_swing(
-            direction, start_index, end_index, high_price, low_price, is_completed
+            direction, start_id, end_id, high_price, low_price, is_completed
         )
 
     def _valid_swing(
@@ -300,7 +317,7 @@ class SwingManager(Observable):
         判断两个分形是否能够组成笔
         """
         if start_fractal is None or end_fractal is None:
-            logger.error("_valid_swing 在调用_valid_swing方法时，参数值有None")
+            logger.error("_valid_swing 在调用_valid_swing方法时，参数值有None", active_swing=active_swing, prev_swing=prev_swing)
             raise AssertionError("start_fractal and end_fractal are both None")
 
         start_fractal_type = start_fractal.fractal_type()
@@ -337,9 +354,9 @@ class SwingManager(Observable):
         )
         if distance / prev_swing.distance < 0.6:
             return False
-        start_index_sbar = start_fractal.middle.index
-        end_index_sbar = end_fractal.middle.index
-        count_between = abs(end_index_sbar - start_index_sbar) - 1
+        start_id_sbar = start_fractal.middle.id
+        end_id_sbar = end_fractal.middle.id
+        count_between = abs(end_id_sbar - start_id_sbar) - 1
         if count_between < 5:
             return False
         return True
@@ -359,17 +376,24 @@ class SwingManager(Observable):
             # 如果未完成，那么最后一个波段就是active swing
             return last_swing
 
-    def get_swing(self, index: int = None, is_completed:bool = None) -> Swing | None:
+    def get_index(self, id: int) -> int:
+        return self.df_swing.select(pl.col("id").search_sorted(id)).item()
+
+    def get_swing(self, id: int = None, is_completed:bool = None) -> Swing | None:
         """
         获取指定波段
-        :param index: 指定index开始的波段，如果没有指定，获取最新波段
+        :param id: 指定id开始的波段，如果没有指定，获取最新波段
         :param is_completed: None：不限制
         :return: Swing | None
         """
-        if index is None:
+        if id is None:
             index = self.df_swing.height - 1
-        if self.df_swing.height <= index or self.df_swing.height == 0:
+        else:
+            index = self.get_index(id)
+
+        if index is None or index < 0 or index > self.df_swing.height -1:
             return None
+
         swing =  Swing(**self.df_swing.row(index, named=True))
 
         if is_completed is None:
@@ -377,69 +401,69 @@ class SwingManager(Observable):
         else:
             return swing if swing.is_completed == is_completed else None
 
-    def prev_opposite_swing(self, index: int) -> Swing | None:
+    def prev_opposite_swing(self, id: int) -> Swing | None:
         """
         前一个与指定波段相反方向的波段
-        :param index: 指定index所在的波段
+        :param id: 指定id所在的波段
         :return: Swing | None
         """
-        if index <= 0 or index >= self.df_swing.height:
+        if id <= 0 or id >= self.df_swing.height:
             return None
-        return Swing(**self.df_swing.row(index - 1, named=True))
+        return Swing(**self.df_swing.row(id - 1, named=True))
 
-    def prev_same_swing(self, index: int) -> Swing | None:
+    def prev_same_swing(self, id: int) -> Swing | None:
         """
         前一个与指定波段相同方向的波段
-        :param index: 指定index所在的波段
+        :param id: 指定id所在的波段
         :return: Swing | None
         """
-        return self.prev_opposite_swing(index - 1)
+        return self.prev_opposite_swing(id - 1)
 
-    def next_opposite_swing(self, index: int) -> Swing | None:
+    def next_opposite_swing(self, id: int) -> Swing | None:
         """
         后一个与指定波段相反方向的波段
-        :param index: 指定index所在的波段
+        :param id: 指定id所在的波段
         :return: Swing | None
         """
-        if index < 0 or index >= self.df_swing.height - 1:
+        if id < 0 or id >= self.df_swing.height - 1:
             return None
-        return Swing(**self.df_swing.row(index + 1, named=True))
+        return Swing(**self.df_swing.row(id + 1, named=True))
 
-    def next_same_swing(self, index: int) -> Swing | None:
+    def next_same_swing(self, id: int) -> Swing | None:
         """
         后一个与指定波段相同方向的波段
-        :param index: 指定index所在的波段
+        :param id: 指定id所在的波段
         :return: Swing | None
         """
-        return self.next_opposite_swing(index + 1)
+        return self.next_opposite_swing(id + 1)
 
-    def prev_swing(self, index: int) -> Swing | None:
+    def prev_swing(self, id: int) -> Swing | None:
         """
         查指定波段的前一个波段（与prev_opposite_swing等效）
-        :param index: 指定index所在的波段
+        :param id: 指定id所在的波段
         :return: Swing | None
         """
-        return self.prev_opposite_swing(index)
+        return self.prev_opposite_swing(id)
 
-    def next_swing(self, index: int) -> Swing | None:
+    def next_swing(self, id: int) -> Swing | None:
         """
         查指定波段的后一个波段（与next_opposite_swing等效）
-        :param index: 指定index所在的波段
+        :param id: 指定id所在的波段
         :return: Swing | None
         """
-        return self.next_opposite_swing(index)
+        return self.next_opposite_swing(id)
 
     def get_swing_list(
-        self, start_index: int, end_index: int, include_active: bool = True
+        self, start_id: int, end_id: int, include_active: bool = True
     ) -> list[Swing] | None:
         """
         获取波段列表
-        :param start_index:
-        :param end_index:
+        :param start_id:
+        :param end_id:
         :param include_active: 是否包含active swing
         :return:
         """
-        df = self.df_swing.slice(start_index, end_index - start_index + 1)
+        df = self.df_swing.slice(start_id, end_id - start_id + 1)
         if not include_active:
             df = df.filter((pl.col("is_completed") == True))
         if df.is_empty():
