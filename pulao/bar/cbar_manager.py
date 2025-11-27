@@ -4,7 +4,7 @@ from typing import Any, List
 
 from pulao.constant import (
     EventType,
-    SwingDirection, FractalType, Const,
+    Direction, FractalType, Const,
 )
 from pulao.events import Observable
 from pulao.bar import SBar, SBarManager, CBar, Fractal
@@ -97,9 +97,9 @@ class CBarManager(Observable):
             prev_dict = self.df_cbar.tail(2).row(0, named=True)
             prev_cbar = CBar(**prev_dict)
             if last_high > prev_cbar.high_price:
-                direction = SwingDirection.UP
+                direction = Direction.UP
             elif last_low < prev_cbar.low_price:
-                direction = SwingDirection.DOWN
+                direction = Direction.DOWN
             # else: 第一个合并段，还没有明确方向，后面会处理
 
         # 如果没有明确方向（只有1根），则按“先高后低”或“先低后高”定方向（常见做法）
@@ -108,14 +108,14 @@ class CBarManager(Observable):
                 if last_high >= last_low:
                     # 都阳线或十字，按收盘或最高最低定，简单处理：谁高谁定向上
                     direction = (
-                        SwingDirection.UP
+                        Direction.UP
                         if curr_high >= last_high
-                        else SwingDirection.DOWN
+                        else Direction.DOWN
                     )
                 else:
-                    direction = SwingDirection.UP
+                    direction = Direction.UP
             else:
-                direction = SwingDirection.DOWN
+                direction = Direction.DOWN
 
         # 开始包含处理
         included = is_inclusive(last_high, last_low, curr_high, curr_low)
@@ -124,7 +124,7 @@ class CBarManager(Observable):
             # 有包含关系 → 合并，且按已有趋势方向处理高低点
             start_id = last_cbar.start_id
 
-            if direction == SwingDirection.UP:
+            if direction == Direction.UP:
                 merged_high = max(last_high, curr_high)
                 merged_low = max(last_low, curr_low)  # 向上趋势，低点取较高的
             else:  # DOWN
@@ -142,7 +142,7 @@ class CBarManager(Observable):
                 new_last = CBar(**self.df_cbar.tail(1).row(0, named=True))
                 prev = CBar(**self.df_cbar.tail(2).row(0, named=True))
 
-                if direction == SwingDirection.UP:
+                if direction == Direction.UP:
                     if new_last.high_price <= prev.high_price:
                         break  # 已经破坏向上趋势，停止向前合并
                 else:
@@ -158,7 +158,7 @@ class CBarManager(Observable):
                 ):
                     # 继续合并
                     start_id = prev.start_id
-                    if direction == SwingDirection.UP:
+                    if direction == Direction.UP:
                         merged_high = max(merged_high, prev.high_price)
                         merged_low = max(merged_low, prev.low_price)
                     else:

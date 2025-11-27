@@ -50,25 +50,13 @@ class FractalType(BaseEnum):
     BOTTOM = -1
     NONE = 0
 
-class SwingDirection(BaseEnum):
+class Direction(BaseEnum):
     """
-    波段方向
-    """
-    UP = 1
-    DOWN = -1
-
-    @property
-    def opposite(self):
-        return SwingDirection.DOWN if self == SwingDirection.UP else SwingDirection.UP
-
-class TrendDirection(BaseEnum):
-    """
-    趋势方向
+    波段/趋势方向
     """
     UP = 1
     DOWN = -1
     RANGE = 2
-
 
 class DecisionAction(BaseEnum):
     """

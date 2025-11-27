@@ -1,7 +1,7 @@
 from typing import Any
 from pulao.events import Observable
 from .trend import Trend
-from ..constant import EventType, TrendDirection
+from ..constant import EventType, Direction
 from ..swing import SwingManager
 
 
@@ -68,14 +68,14 @@ class TrendManager(Observable):
         trend = Trend()
         # 趋势判定
         if swing_prev_2.high_price < swing_prev_1.high_price < swing_current.high_price and swing_prev_2.low_price < swing_prev_1.low_price < swing_current.low_price: # 上涨趋势
-            trend.direction = TrendDirection.UP
+            trend.direction = Direction.UP
         elif swing_prev_2.high_price > swing_prev_1.high_price > swing_current.high_price and swing_prev_2.low_price > swing_prev_1.low_price > swing_current.low_price: # 下降趋势:
-            trend.direction = TrendDirection.DOWN
+            trend.direction = Direction.DOWN
         else: # 横向区间
-            trend.direction = TrendDirection.RANGE
+            trend.direction = Direction.RANGE
 
-        trend.start_index = swing_prev_2.id
-        trend.end_index = swing_current.id
+        trend.start_id = swing_prev_2.id
+        trend.end_id = swing_current.id
         trend.start_index_bar = swing_prev_2.start_index_bar
         trend.end_index_bar = swing_current.end_index_bar
 
@@ -91,23 +91,23 @@ class TrendManager(Observable):
             tmp_swing_current = self.swing_manager.prev_swing(tmp_swing_next_1.id)
             if tmp_swing_current is None:
                 break
-            if trend.direction == TrendDirection.UP:
+            if trend.direction == Direction.UP:
                 if tmp_swing_current.high_price < tmp_swing_next_2.high_price and tmp_swing_current.low_price < tmp_swing_next_2.low_price: # 向前延伸
-                    trend.start_index = tmp_swing_current.id
+                    trend.start_id = tmp_swing_current.id
                     trend.start_index_bar = tmp_swing_current.start_index_bar
                     trend.low_price = min(trend.low_price, tmp_swing_current.low_price)
                 else: # 终结-起始位置已确定
-                    trend.start_index = tmp_swing_next_1.id
+                    trend.start_id = tmp_swing_next_1.id
                     trend.start_index_bar = tmp_swing_next_1.start_index_bar
                     trend.low_price = min(trend.low_price, tmp_swing_next_1.low_price)
                     break
-            elif trend.direction == TrendDirection.DOWN:
+            elif trend.direction == Direction.DOWN:
                 if tmp_swing_current.high_price > tmp_swing_next_2.high_price and tmp_swing_current.low_price > tmp_swing_next_2.low_price: # 向前延伸
-                    trend.start_index = tmp_swing_current.id
+                    trend.start_id = tmp_swing_current.id
                     trend.start_index_bar = tmp_swing_current.start_index_bar
                     trend.high_price = max(trend.high_price, tmp_swing_current.high_price)
                 else: # 终结-起始位置已确定
-                    trend.start_index = tmp_swing_next_1.id
+                    trend.start_id = tmp_swing_next_1.id
                     trend.start_index_bar = tmp_swing_next_1.start_index_bar
                     trend.high_price = max(trend.high_price, tmp_swing_next_1.high_price)
                     break
@@ -120,7 +120,7 @@ class TrendManager(Observable):
                 # 当前波段的范围是否有原有区间重叠，有重叠视为区间延续
                 overlap = max(tmp_swing_current.low_price, trend.low_price) <= min(tmp_swing_current.high_price, trend.high_price)
                 if overlap:
-                    trend.start_index = tmp_swing_current.start_id # 调整开始位置
+                    trend.start_id = tmp_swing_current.start_id # 调整开始位置
                     trend.start_index_bar = tmp_swing_current.start_index_bar
                     # TODO 区间价格如何调整？
                 else:
@@ -171,4 +171,4 @@ class TrendManager(Observable):
         return self.next_opposite_trend(index)
 
     def get_swing_list(self, trend:Trend):
-        return self.swing_manager.get_swing_list(trend.start_index, trend.end_index)
+        return self.swing_manager.get_swing_list(trend.start_id, trend.end_id)

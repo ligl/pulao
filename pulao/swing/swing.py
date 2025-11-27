@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from pulao.constant import SwingDirection
+from pulao.constant import Direction
 from datetime import datetime as Datetime
 
 @dataclass
@@ -9,7 +9,7 @@ class Swing:
     一次推动力量，其间没有明显反抗力量，由分形一顶一底相连构成
     """
     id: int = None # swing_df 中 自增id
-    direction: SwingDirection = None
+    direction: Direction = None
     start_id: int = None  # 波段起始点id cbar_df
     end_id: int = None
     high_price: float = 0
@@ -20,7 +20,7 @@ class Swing:
 
     def __post_init__(self):
         if isinstance(self.direction, int):
-            self.direction = SwingDirection(self.direction)
+            self.direction = Direction(self.direction)
 
     @property
     def length(self):
@@ -38,8 +38,8 @@ class Swing:
         """
         获取波段对立的方向
         """
-        if self.direction == SwingDirection.UP:
-            return SwingDirection.DOWN
+        if self.direction == Direction.UP:
+            return Direction.DOWN
         else:
-            return SwingDirection.UP
+            return Direction.UP
 

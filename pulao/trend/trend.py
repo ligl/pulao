@@ -1,22 +1,18 @@
 from dataclasses import dataclass
 
-from pulao.constant import TrendDirection
+from pulao.constant import Direction
 
 
 @dataclass
 class Trend:
-    index: int
-    direction: TrendDirection  # up / down / range
-    start_index: int = 0 # swing_df
-    end_index: int = 0
+    id: int = None
+    direction: Direction = None  # up / down / range
+    start_id: int = 0 # swing_df
+    end_id: int = 0
     high_price: float = 0
     low_price: float = 0
     strength: float = 0
     is_completed: bool = False  # 趋势是否完成
-
-    @property
-    def length(self):
-        return self.end_index - self.start_index + 1
 
     @property
     def distance(self):
@@ -27,13 +23,9 @@ class Trend:
 
     def price_ratio(self, price: float) -> float:
         span = max(self.high_price - self.low_price, 1e-9)
-        if self.direction == TrendDirection.UP:
+        if self.direction == Direction.UP:
             return (price - self.low_price) / span
-        elif self.direction == TrendDirection.DOWN:
+        elif self.direction == Direction.DOWN:
             return (self.high_price - price) / span
         return (price - self.low_price) / span
 
-    def get_swings(self):
-        """
-        获取组成趋势的波段列表
-        """

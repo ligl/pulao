@@ -1,4 +1,3 @@
-from dataclasses import replace
 from typing import Any, List
 
 import polars as pl
@@ -9,7 +8,7 @@ from .swing import Swing
 from ..bar import CBarManager, Fractal, CBar
 from ..constant import (
     EventType,
-    SwingDirection,
+    Direction,
     FractalType, Const,
 )
 from ..logging import logger
@@ -131,9 +130,9 @@ class SwingManager(Observable):
                 return
             # 以分形为基础创建波段起点
             self._append_swing(
-                direction=SwingDirection.DOWN
+                direction=Direction.DOWN
                 if fractal_type == FractalType.TOP
-                else SwingDirection.UP,
+                else Direction.UP,
                 start_id=curr_fractal.id,
                 end_id=curr_fractal.cbar_end_id,
                 high_price=curr_fractal.high_price,
@@ -155,7 +154,7 @@ class SwingManager(Observable):
                 logger.error("不应该出现last_completed_swing is not completed", last_completed_swing=last_completed_swing, active_swing=active_swing)
                 raise AssertionError("不应该出现last_completed_swing is not completed")
 
-            if last_completed_swing.direction == SwingDirection.DOWN:
+            if last_completed_swing.direction == Direction.DOWN:
                 if last_bar.low_price < last_completed_swing.low_price:
                     # 新bar比下降波段的最低价还低，重新延续波段
                     last_completed_swing.end_id = last_bar.id
@@ -171,7 +170,7 @@ class SwingManager(Observable):
                                               is_completed=last_completed_swing.is_completed)
                     logger.debug("打开前一完成波段，延续", last_completed_swing=last_completed_swing, last_bar=last_bar)
                     return
-            elif last_completed_swing.direction == SwingDirection.UP:
+            elif last_completed_swing.direction == Direction.UP:
                 if last_bar.high_price > last_completed_swing.high_price:
                     last_completed_swing.end_id = last_bar.id
                     last_completed_swing.high_price = last_bar.high_price
@@ -274,7 +273,7 @@ class SwingManager(Observable):
             )  # 删除未完成的波段
     def _append_swing(
         self,
-        direction: SwingDirection,
+        direction: Direction,
         start_id: int,
         end_id: int,
         high_price: float,
@@ -309,7 +308,7 @@ class SwingManager(Observable):
     def _update_active_swing(
         self,
         id: int,
-        direction: SwingDirection,
+        direction: Direction,
         start_id: int,
         end_id: int,
         high_price: float,
@@ -494,7 +493,7 @@ class SwingManager(Observable):
 
     def get_swing_list(
         self, start_id: int, end_id: int, include_active: bool = True
-    ) -> list[Swing] | None:
+    ) -> List[Swing] | None:
         """
         获取波段列表
         :param start_id:
