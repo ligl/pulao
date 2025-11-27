@@ -23,10 +23,6 @@ class Swing:
             self.direction = Direction(self.direction)
 
     @property
-    def length(self):
-        return self.end_id - self.start_id + 1
-
-    @property
     def distance(self):
         return self.high_price - self.low_price
 

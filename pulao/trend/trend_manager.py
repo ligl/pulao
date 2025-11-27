@@ -3,14 +3,29 @@ from pulao.events import Observable
 from .trend import Trend
 from ..constant import EventType, Direction
 from ..swing import SwingManager
-
+import polars as pl
+from datetime import datetime as Datetime
+from ..logging import logger
+from ..utils import IDGenerator
 
 class TrendManager(Observable):
 
     def __init__(self, swing_manager: SwingManager):
         super().__init__()
+        schema = {
+            "id": pl.UInt64,
+            "start_id": pl.UInt64,  # df_swing id
+            "end_id": pl.UInt64,  # 如果是active trend，end_id = 最新k线
+            "high_price": pl.Float32,
+            "low_price": pl.Float32,
+            "direction": pl.Int8,
+            "is_completed": pl.Boolean,  # 还未被确认的趋势，即正在进行中的趋势，在实时行情中尚未被确认
+            "created_at": pl.Datetime("ms"),
+        }
+        self.df_trend: pl.DataFrame = pl.DataFrame(schema=schema)
         self.swing_manager = swing_manager
         self.swing_manager.subscribe(self._on_swing_changed)
+        self.id_gen = IDGenerator()
 
     def _on_swing_changed(self, event: EventType, payload: Any):
         self.detect()

@@ -151,7 +151,7 @@ class SwingManager(Observable):
         # 在当前波段未终结前，任何一个时刻都有可能打破前完成波段，使其重新延续
         if last_completed_swing:
             if not last_completed_swing.is_completed:
-                logger.error("不应该出现last_completed_swing is not completed", last_completed_swing=last_completed_swing, active_swing=active_swing)
+                logger.error("不应该出现last_completed_swing is not completed", last_completed_swing=last_completed_swing)
                 raise AssertionError("不应该出现last_completed_swing is not completed")
 
             if last_completed_swing.direction == Direction.DOWN:
@@ -365,21 +365,21 @@ class SwingManager(Observable):
         # 2）且已经超过了前一波段的60%，
         # 3）并且在包含合并处理之前的sbar中，间隔超过5根K线，
         # 那么，也视为波段成立（因为反抗力量确实也足够）
-        # if prev_swing is None:
-        #     logger.debug("_valid_swing prev_swing为None，波动率比较取消")
-        #     return False
-        # if start_fractal.overlap(end_fractal, is_strict=False):
-        #     return False
-        # distance = max(start_fractal.high_price, end_fractal.high_price) - min(
-        #     start_fractal.low_price, end_fractal.low_price
-        # )
-        # if distance / prev_swing.distance < 0.6:
-        #     return False
-        # start_id_sbar = start_fractal.middle.id
-        # end_id_sbar = end_fractal.middle.id
-        # count_between = abs(end_id_sbar - start_id_sbar) - 1
-        # if count_between >= 5:
-        #     return True
+        if prev_swing is None:
+            logger.debug("_valid_swing prev_swing为None，波动率比较取消")
+            return False
+        if start_fractal.overlap(end_fractal, is_strict=False):
+            return False
+        distance = max(start_fractal.high_price, end_fractal.high_price) - min(
+            start_fractal.low_price, end_fractal.low_price
+        )
+        if distance / prev_swing.distance < 0.6:
+            return False
+        start_id_sbar = start_fractal.middle.id
+        end_id_sbar = end_fractal.middle.id
+        count_between = abs(end_id_sbar - start_id_sbar) - 1
+        if count_between >= 5:
+            return True
 
         return False
 
