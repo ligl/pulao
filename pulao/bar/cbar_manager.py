@@ -31,20 +31,37 @@ class CBarManager(Observable):
         self.sbar_manager: SBarManager = sbar_manager
         self.sbar_manager.subscribe(self._on_sbar_created)
         self.id_gen = IDGenerator()
+        self.backtrack_id = None # 合并之后，从哪个k线开始重新计算
 
     def _on_sbar_created(self, event: EventType, sbar: Any):
         # 1. K线包含处理
         self._agg_bar(sbar)
         # 2. 分形检测
         self._detect_fractal()
+        # 3. save to parquet
+        self.write_parquet()
 
-        self.notify(EventType.CBAR_CREATED)
+        self.notify(EventType.CBAR_CREATED, dict(backtrack_id=self.backtrack_id))
+
+    def write_parquet(self):
+        # TODO 实时行情不能这么做，需要考虑性能影响
+        self.df_cbar.write_parquet(
+            "./cbar_data.parquet",
+            compression="zstd",
+            compression_level=3,
+            statistics=False
+        )
+
+    def read_parquet(self):
+        self.df_cbar = pl.read_parquet("./cbar_data.parquet")
+        return self.df_cbar
 
     def _agg_bar(self, sbar: SBar):
         """
         K线包含关系处理（缠论预处理第一步）
         将原始K线合并为无包含关系的处理后K线序列
         """
+        self.backtrack_id = None
         # 当前待处理的原始K线
         curr_high = sbar.high_price
         curr_low = sbar.low_price
@@ -115,6 +132,7 @@ class CBarManager(Observable):
                 merged_low = min(last_low, curr_low)
 
             # 移除最后一条（因为要被合并替换）
+            self.backtrack_id = last_cbar.id
             self.df_cbar = self.df_cbar.slice(0, self.df_cbar.height - 1)
 
             # 关键：可能还需要向前继续合并！
@@ -147,6 +165,7 @@ class CBarManager(Observable):
                         merged_high = min(merged_high, prev.high_price)
                         merged_low = min(merged_low, prev.low_price)
                     # 删除倒数第二根（现在成了最后）
+                    self.backtrack_id = new_last.id
                     self.df_cbar = self.df_cbar.slice(0, self.df_cbar.height - 1)
                 else:
                     break
@@ -160,7 +179,7 @@ class CBarManager(Observable):
         self._append_cbar(start_id, end_id, merged_high, merged_low)
 
     def _append_cbar(
-        self, start_id: int, end_id: int, high_price: float, low_price: float
+        self, start_id: int, end_id: int, high_price: float, low_price: float, fractal_type:FractalType = FractalType.NONE
     ):
         new_cbar = {
             "id": self.id_gen.get_id(),
@@ -168,9 +187,10 @@ class CBarManager(Observable):
             "end_id": end_id,
             "high_price": high_price,
             "low_price": low_price,
-            "fractal_type": FractalType.NONE.value,
+            "fractal_type": fractal_type.value,
             "created_at": Datetime.now(),
         }
+
         self.df_cbar = self.df_cbar.vstack(
             pl.DataFrame([new_cbar], schema=self.df_cbar.schema)
         )
@@ -213,6 +233,56 @@ class CBarManager(Observable):
         if count == 1:
             return CBar(**df.row(0, named=True))
         return  [CBar(**row) for row in df.rows(named=True)]
+
+    def get_cbar_list(self, start_id:int, end_id:int=None)->List[CBar] | None:
+        start_index = self.get_index(start_id)
+        if end_id is None:
+            end_index = self.df_cbar.height - 1
+        else:
+            end_index = self.get_index(end_id)
+        if start_index is None or end_index is None:
+            return None
+        if start_index > end_index:
+            return None
+        df = self.df_cbar.slice(start_index, end_index - start_index + 1)
+        if df.is_empty():
+            return None
+
+        return [CBar(**row) for row in df.rows(named=True)]
+
+    def get_nearby_cbar(self, id:int, count:int=None) -> None | CBar | List[CBar]:
+        """
+        获取指定id向前/向后 count个cbar
+        :param id:
+        :param count: 正数向后，负数向前，None:获取到结尾
+        :return: None | CBar | List[CBar]
+        """
+        index = self.get_index(id)
+        if index is None:
+            return None
+        if count is None:
+            count = self.df_cbar.height - 1
+        if count < 0: # 向前
+            count = -count  # 变成正数
+            end_index = index - 1
+            start_index = end_index - count + 1
+        else: # 向后
+            start_index = index + 1
+            end_index = start_index + count - 1
+
+        if start_index < 0:
+            start_index = 0
+            end_index = index - 1
+        if end_index <= 0:
+            return None
+
+        df = self.df_cbar.slice(start_index, end_index - start_index + 1)
+        if df.is_empty():
+            return None
+        if count == 1:
+            return CBar(**df.row(0, named=True))
+
+        return [CBar(**row) for row in df.rows(named=True)]
 
     def get_fractal(self, id: int = None) -> Fractal | None:
         if id is None:

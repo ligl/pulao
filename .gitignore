@@ -6,6 +6,10 @@
 
 # Jupyter
 .ipynb_checkpoints
+iframe_figures/
+logs/
+log/
+*.parquet
 
 # IDE
 .vscode
