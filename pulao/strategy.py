@@ -1,4 +1,4 @@
-from typing import Callable
+from typing import Callable, Any
 
 from vnpy.trader.constant import Interval
 from vnpy.trader.object import BarData, TickData
@@ -11,6 +11,22 @@ from pulao.bar import SBarManager, SBar
 @BaseDecorator()
 class PulaoStrategy(CtaTemplate):
     author = "Pulao"
+
+    def __init__(
+        self,
+        cta_engine: Any,
+        strategy_name: str,
+        vt_symbol: str,
+        setting: dict,
+    ):
+        super().__init__(cta_engine, strategy_name, vt_symbol, setting)
+        self.sbar_manager_entry = None
+        self.sbar_manager_swing = None
+        self.sbar_manager_trend = None
+        self.bg_entry = None
+        self.bg_trade = None
+        self.bg_trend = None
+        self.bg_tick = None
 
     def on_init(self) -> None:
         # 聚合K线，生成高周期K线

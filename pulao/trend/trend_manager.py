@@ -1,20 +1,27 @@
-from typing import Any
-from pulao.events import Observable
-from .trend import Trend
-from ..constant import EventType, Direction
-from ..swing import SwingManager
+from typing import Any, List
+
 import polars as pl
 from datetime import datetime as Datetime
+
+from pulao.events import Observable
+from .trend import Trend
+from ..bar import  Fractal, CBar
+from ..constant import (
+    EventType,
+    Direction,
+    FractalType, Const,
+)
 from ..logging import logger
+from ..swing import SwingManager, Swing
 from ..utils import IDGenerator
 
-class TrendManager(Observable):
 
+class TrendManager(Observable):
     def __init__(self, swing_manager: SwingManager):
         super().__init__()
         schema = {
             "id": pl.UInt64,
-            "start_id": pl.UInt64,  # df_swing id
+            "start_id": pl.UInt64, # df_cbar id
             "end_id": pl.UInt64,  # 如果是active trend，end_id = 最新k线
             "high_price": pl.Float32,
             "low_price": pl.Float32,
@@ -23,167 +30,297 @@ class TrendManager(Observable):
             "created_at": pl.Datetime("ms"),
         }
         self.df_trend: pl.DataFrame = pl.DataFrame(schema=schema)
-        self.swing_manager = swing_manager
+        self.swing_manager: SwingManager = swing_manager
         self.swing_manager.subscribe(self._on_swing_changed)
         self.id_gen = IDGenerator()
 
     def _on_swing_changed(self, event: EventType, payload: Any):
-        self.detect()
+        # 趋势检测识别
+        # logger.debug("_on_cbar_created", payload=payload)
+        # if payload["backtrack_id"] is None:
+        #     self._build_trend()
+        # else:
+        #     self._clean_reset(payload["backtrack_id"])
+        #     self._backtrack_replay(payload["backtrack_id"])
+        self._build_trend()
 
-    def detect(self):
-        """
-        趋势检测识别
-        """
-        # region 检测算法
-        #
-        # 1. 趋势定义
-        # 1.1 趋势高低点关系定义趋势，至少由4个相临高低点定义
-        # 2. 趋势分类
-        # 2.1 上涨趋势
-        # 2.1.1 高点抬高，低点抬高
-        # 2.2 下跌趋势
-        # 2.2.1 高点降低，低点降低
-        # 2.3 横盘区间
-        # 2.3.1 趋势点没有明显高低关系，呈横向震荡区间，视觉上呈收敛三角形或扩散三角形
-        #
-        # endregion
+    def _clean_reset(self, traceback_id: int):
+        # 1. 清理df_trend
+        df = self.df_trend.filter(
+            (pl.col("start_id") <= traceback_id) & (traceback_id <= pl.col("end_id")))
+        if df.is_empty():
+            return
+        # 只有一种情况会出现两条数据，即traceback_id是一个趋势的终点，同时又是另一个趋势的起点
+        first_trend = Trend(**df.row(0, named=True))
+        first_trend_index = self.get_index(first_trend.id)
+        if df.height > 1:
+            # 删除traceback_id之后的数据
+            logger.debug("_clean_trend 删除traceback_id之后的数据", traceback_id=traceback_id,
+                         first_trend=first_trend, first_trend_index=first_trend_index)
+            self.df_trend = self.df_trend.slice(0, first_trend_index + 1)
+        if first_trend.start_id == traceback_id:  # 说明只有一个趋势的时候
+            logger.debug("_clean_trend 清空趋势，重新构建", first_trend=first_trend,
+                         first_trend_index=first_trend_index)
+            self.df_trend = self.df_trend.slice(0, first_trend_index)
+        else:
+            # 在趋势的中间
+            first_trend.is_completed = False
+            cbar = self.swing_manager.get_nearby_swing(traceback_id, -1)
+            first_trend.end_id = cbar.id if cbar else None
+            self._update_active_trend(id=first_trend.id, direction=first_trend.direction,
+                              start_id=first_trend.start_id, end_id=first_trend.end_id,
+                              high_price=first_trend.high_price, low_price=first_trend.low_price,
+                              is_completed=first_trend.is_completed)
 
-    def get_trend(self, index:int=None) -> Trend | None:
+    def _backtrack_replay(self, backtrack_id:int = None):
+        """
+        查找要从哪个swing开始回放处理，取值min(backtrack_id, trend.end_id)
+        """
+        # 2. 获取需要处理的swing[backtrack_id, last_id]，进行回放
+        swing_list = self.swing_manager.get_nearby_swing(backtrack_id)
+        if swing_list is None:
+            return
+        for swing in swing_list:
+            self._build_trend(swing)
+
+    def _build_trend(self, swing: Swing = None):
+        """
+        构建趋势
+        """
+        #
+        # 趋势
+        # 定义：由波段的高低间关系构成
+        # 判定标准:
+        # 执行流程：
+        #
+        #
+
+    def _del_active_trend(self):
+        active_trend = self.get_active_trend()
+        if active_trend:
+            self.df_trend = self.df_trend.slice(
+                0, self.df_trend.height - 1
+            )  # 删除未完成的趋势
+
+    def _append_trend(
+        self,
+        direction: Direction,
+        start_id: int,
+        end_id: int,
+        high_price: float,
+        low_price: float,
+        is_completed: bool
+    ):
+        new_trend = {
+            "id": self.id_gen.get_id(),
+            "direction": direction.value,
+            "start_id": start_id,
+            "end_id": end_id,
+            "high_price": high_price,
+            "low_price": low_price,
+            "is_completed": is_completed,
+            "created_at": Datetime.now(),
+        }
+        if is_completed:
+            start_fractal = self.swing_manager.get_fractal(start_id)
+            end_fractal = self.swing_manager.get_fractal(end_id)
+            if not start_fractal or not end_fractal:
+                logger.error(
+                    "趋势断定无效",
+                    trend=new_trend,
+                    start_fractal=start_fractal,
+                    end_fractal=end_fractal,
+                )
+                raise AssertionError("趋势断定无效")
+        self.df_trend = self.df_trend.vstack(
+            pl.DataFrame([new_trend], schema=self.df_trend.schema)
+        )
+
+    def _update_active_trend(
+        self,
+        id: int,
+        direction: Direction,
+        start_id: int,
+        end_id: int,
+        high_price: float,
+        low_price: float,
+        is_completed: bool,
+    ):
+        """
+        更新逻辑：先删除旧数据，再添加新数据，每条数据的id都不同
+        """
+        # 先删除再添加
+        if self.df_trend.height > 0:
+            self.df_trend = self.df_trend.slice(
+                0, self.df_trend.height - 1
+            )  # 删除原active trend，即最后一行
+        self._append_trend(
+            direction, start_id, end_id, high_price, low_price, is_completed
+        )
+
+    def _determine_trend(
+        self,
+        start_swing: Fractal,
+        end_swing: Fractal,
+        active_trend: Trend,
+        prev_trend: Trend = None,
+    ) -> bool:
+        """
+        判定两个分形是否能够组成笔
+        """
+
+        return False
+
+    def get_fractal(self, cbar_id: int) -> Fractal:
+        return self.swing_manager.get_fractal(cbar_id)
+
+    def get_active_trend(self) -> Trend | None:
+        """
+        获取未完成的趋势
+        :return: Trend | None
+        """
+        last_trend = self.get_trend()
+        if not last_trend:
+            return None
+        if last_trend.is_completed:
+            # 最后一个趋势已经完成
+            return None
+        else:
+            # 如果未完成，那么最后一个趋势就是active trend
+            return last_trend
+
+    def get_index(self, id: int) -> int:
+        return self.df_trend.select(pl.col("id").search_sorted(id)).item()
+
+    def get_trend(self, id: int = None, is_completed:bool = None) -> Trend | None:
         """
         获取指定趋势
-        :param index: 指定趋势，如果未指定，获取最新的趋势
-        :return: Trend or None
+        :param id: 指定id的趋势，如果没有指定，获取最新趋势
+        :param is_completed: None：不限制
+        :return: Trend | None
         """
-        #
-        # 获取连续的3个已完成的波段用于确定趋势
-        # 从右往左排序（1.2.3...）
-        # swing_current：当前波段
-        # swing_prev_1：前一波段
-        # swing_prev_2: 再往前一波段
-        # swing_next_1：后一波段
-        # swing_next_2：再往后一波段
-        #
+        if id is None:
+            index = self.df_trend.height - 1 # 取最后一条
+        else:
+            index = self.get_index(id)
 
-
-        swing_current = self.swing_manager.get_swing(index)
-        while True: # 查最近一个已完成的波段，作为趋势的判断边界
-            if swing_current is None: # 查完所有波段后，一个完成的都没有，不满足趋势的判定条件
-                return None
-            if swing_current.is_completed:
-                break
-            swing_current = self.swing_manager.prev_swing(swing_current.id) # 查前一个波段
-
-        swing_prev_1 = self.swing_manager.prev_swing(swing_current.id)
-        if swing_prev_1 is None:
-            return None
-        swing_prev_2 = self.swing_manager.prev_swing(swing_prev_1.id)
-        if swing_prev_2 is None:
+        if index is None or index < 0 or index > self.df_trend.height -1:
             return None
 
-        trend = Trend()
-        # 趋势判定
-        if swing_prev_2.high_price < swing_prev_1.high_price < swing_current.high_price and swing_prev_2.low_price < swing_prev_1.low_price < swing_current.low_price: # 上涨趋势
-            trend.direction = Direction.UP
-        elif swing_prev_2.high_price > swing_prev_1.high_price > swing_current.high_price and swing_prev_2.low_price > swing_prev_1.low_price > swing_current.low_price: # 下降趋势:
-            trend.direction = Direction.DOWN
-        else: # 横向区间
-            trend.direction = Direction.RANGE
-
-        trend.start_id = swing_prev_2.id
-        trend.end_id = swing_current.id
-        trend.start_index_bar = swing_prev_2.start_index_bar
-        trend.end_index_bar = swing_current.end_index_bar
-
-        trend.is_completed = True
-
-        trend.high_price = max(swing_current.high_price, swing_prev_1.high_price, swing_prev_2.high_price)
-        trend.low_price = min(swing_current.low_price, swing_prev_1.low_price, swing_prev_2.low_price)
-
-        # 查找此趋势的开始位置
-        tmp_swing_next_1 = swing_prev_2
-        tmp_swing_next_2 = swing_prev_1
-        while True:
-            tmp_swing_current = self.swing_manager.prev_swing(tmp_swing_next_1.id)
-            if tmp_swing_current is None:
-                break
-            if trend.direction == Direction.UP:
-                if tmp_swing_current.high_price < tmp_swing_next_2.high_price and tmp_swing_current.low_price < tmp_swing_next_2.low_price: # 向前延伸
-                    trend.start_id = tmp_swing_current.id
-                    trend.start_index_bar = tmp_swing_current.start_index_bar
-                    trend.low_price = min(trend.low_price, tmp_swing_current.low_price)
-                else: # 终结-起始位置已确定
-                    trend.start_id = tmp_swing_next_1.id
-                    trend.start_index_bar = tmp_swing_next_1.start_index_bar
-                    trend.low_price = min(trend.low_price, tmp_swing_next_1.low_price)
-                    break
-            elif trend.direction == Direction.DOWN:
-                if tmp_swing_current.high_price > tmp_swing_next_2.high_price and tmp_swing_current.low_price > tmp_swing_next_2.low_price: # 向前延伸
-                    trend.start_id = tmp_swing_current.id
-                    trend.start_index_bar = tmp_swing_current.start_index_bar
-                    trend.high_price = max(trend.high_price, tmp_swing_current.high_price)
-                else: # 终结-起始位置已确定
-                    trend.start_id = tmp_swing_next_1.id
-                    trend.start_index_bar = tmp_swing_next_1.start_index_bar
-                    trend.high_price = max(trend.high_price, tmp_swing_next_1.high_price)
-                    break
+        trend =  Trend(**self.df_trend.row(index, named=True))
+        # 有没有指定id
+        if id:
+            if is_completed is None:
+                return trend
             else:
-                # 当前趋势为横向区间，要判断其开始位置需要往前回溯
-                # 往前继续找一个趋势类型，
-                # 1. 如果是上涨或下跌，此区间起点确定
-                # 2. 如果是区间，一直找，直至不是区间
-                # 3. 调整区间边界高低点
-                # 当前波段的范围是否有原有区间重叠，有重叠视为区间延续
-                overlap = max(tmp_swing_current.low_price, trend.low_price) <= min(tmp_swing_current.high_price, trend.high_price)
-                if overlap:
-                    trend.start_id = tmp_swing_current.start_id # 调整开始位置
-                    trend.start_index_bar = tmp_swing_current.start_index_bar
-                    # TODO 区间价格如何调整？
-                else:
-                    break
+                return trend if trend.is_completed == is_completed else None
+        else:
+            # 没有指定id
+            if is_completed is None: # a. 对状态没有要求
+                return trend
+            else:
+                if trend.is_completed == is_completed: # b. 要求的状态正好与最后一条吻合
+                    return trend
+                else: # c. 要求的状态与最后一条不吻合，查找最新的一条满足条件的数据
+                    df = self.df_trend.tail(Const.LOOKBACK_LIMIT).filter(pl.col("is_completed") == is_completed).tail(1)
+                    if df.is_empty():
+                        return None
+                    return Trend(**df.row(0, named=True))
 
-            tmp_swing_next_2 = tmp_swing_next_1
-            tmp_swing_next_1 = tmp_swing_current
+    def get_trend_by_index(self, index: int) -> Trend | None:
+        """
+        通过索引获取趋势
+        :param index: 索引值
+        :return: Trend | None
+        """
+        if index is None or index <= 0 or index >= self.df_trend.height - 1:
+            return None
+        return Trend(**self.df_trend.row(index - 1, named=True))
 
-        return trend
-
-    def prev_opposite_trend(self, index:int=None) -> Trend | None:
+    def prev_opposite_trend(self, id: int) -> Trend | None:
         """
         前一个与指定趋势相反方向的趋势
-        :param index: 指定趋势，如果未指定，获取最新的趋势
-        :return: Trend or None
+        :param id: 指定id所在的趋势
+        :return: Trend | None
         """
-        raise NotImplementedError("未实现")
+        index = self.get_index(id)
+        if index is None:
+            return None
+        return self.get_trend_by_index(index - 1)
 
-    def prev_same_trend(self, index:int=None):
+    def prev_same_trend(self, id: int) -> Trend | None:
         """
         前一个与指定趋势相同方向的趋势
-        :param index: 指定趋势，如果未指定，获取最新的趋势
-        :return: Trend or None
+        :param id: 指定id所在的趋势
+        :return: Trend | None
         """
-        raise NotImplementedError("未实现")
+        index = self.get_index(id)
+        if index is None:
+            return None
+        return self.get_trend_by_index(index - 2)
 
-    def next_opposite_trend(self, index:int=None) -> Trend | None:
+    def next_opposite_trend(self, id: int) -> Trend | None:
         """
         后一个与指定趋势相反方向的趋势
-        :param index: 指定趋势，如果未指定，获取最新的趋势
-        :return: Trend or None
+        :param id: 指定id所在的趋势
+        :return: Trend | None
         """
-        raise NotImplementedError("未实现")
+        index = self.get_index(id)
+        if index is None:
+            return None
+        return self.get_trend_by_index(index + 1)
 
-    def next_same_trend(self, index:int=None) -> Trend | None:
+    def next_same_trend(self, id: int) -> Trend | None:
         """
         后一个与指定趋势相同方向的趋势
-        :param index: 指定趋势，如果未指定，获取最新的趋势
-        :return: Trend or None
+        :param id: 指定id所在的趋势
+        :return: Trend | None
         """
+        index = self.get_index(id)
+        if index is None:
+            return None
+        return self.get_trend_by_index(index + 2)
 
-        raise NotImplementedError("未实现")
+    def prev_trend(self, id: int) -> Trend | None:
+        """
+        查指定趋势的前一个趋势（与prev_opposite_trend等效）
+        :param id: 指定id所在的趋势
+        :return: Trend | None
+        """
+        return self.prev_opposite_trend(id)
 
-    def prev(self, index:int=None) -> Trend | None:
-        return self.prev_opposite_trend(index)
+    def next_trend(self, id: int) -> Trend | None:
+        """
+        查指定趋势的后一个趋势（与next_opposite_trend等效）
+        :param id: 指定id所在的趋势
+        :return: Trend | None
+        """
+        return self.next_opposite_trend(id)
 
-    def next(self, index:int=None) -> Trend | None:
-        return self.next_opposite_trend(index)
+    def get_trend_list(
+        self, start_id: int, end_id: int, include_active: bool = True
+    ) -> List[Trend] | None:
+        """
+        获取[start_id,end_id]之间的趋势列表
+        :param start_id:
+        :param end_id:
+        :param include_active: 是否包含active trend
+        :return:
+        """
+        start_index = self.get_index(start_id)
+        end_index = self.get_index(end_id)
+        if start_index is None or end_index is None:
+            return None
+        if start_index > end_index:  # 交换
+            start_index, end_index = end_index, start_index
 
-    def get_swing_list(self, trend:Trend):
+        df = self.df_trend.slice(start_index, end_index - start_index + 1)
+        if not include_active:
+            df = df.filter((pl.col("is_completed") == True))
+        if df.is_empty():
+            return None
+        return [Trend(**row) for row in df.rows(named=True)]
+
+    def get_swing_list(self, trend:Trend) -> List[Swing] | None:
         return self.swing_manager.get_swing_list(trend.start_id, trend.end_id)
+

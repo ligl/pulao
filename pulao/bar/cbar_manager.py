@@ -211,7 +211,7 @@ class CBarManager(Observable):
 
         left_bar, middle_bar, right_bar = last_bar_list
 
-        fractal_type = Fractal.is_fractal(left_bar, middle_bar, right_bar)
+        fractal_type = Fractal.verify(left_bar, middle_bar, right_bar)
 
         if fractal_type != FractalType.NONE:  # 是分形
             # 是分形，更新分形标识，更新cbar_df数据源

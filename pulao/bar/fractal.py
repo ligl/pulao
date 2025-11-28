@@ -85,10 +85,10 @@ class Fractal:
         return max(low1, low2) <= min(high1, high2)
 
     def fractal_type(self, strict_model:bool = True) -> FractalType:
-        return Fractal.is_fractal(self.left, self.middle, self.right, strict_model=strict_model)
+        return Fractal.verify(self.left, self.middle, self.right, strict_model=strict_model)
 
     @classmethod
-    def is_fractal(cls, left: CBar, middle: CBar, right: CBar, strict_model:bool = False) -> FractalType:
+    def verify(cls, left: CBar, middle: CBar, right: CBar, strict_model:bool = False) -> FractalType:
         """
         判断分形
         :param left: left cbar
