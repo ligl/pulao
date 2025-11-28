@@ -52,7 +52,7 @@ class FractalType(BaseEnum):
 
 class Direction(BaseEnum):
     """
-    波段/趋势方向
+    波段/趋势方向，也包含逻辑方向，只要是跟走势相差的方向属性都可以用
     """
     UP = 1
     DOWN = -1

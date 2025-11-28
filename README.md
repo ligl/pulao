@@ -9,6 +9,19 @@
 # 设计思想
 > 以“推动-反抗”力量在图表上的表现作为区分依据，推理出如下基础元素：分形 - 波段 - 趋势
 - 
+# parquet目录结构
+data/
+  <品种代码>/           # 如 rb、i、IF
+    contracts/          # 每个合约的原始数据
+      <合约代码>/<周期>.parquet
+      ...
+    continuous/         # 连续合约或主力合约
+      <类型>/<周期>.parquet
+      ...
+    meta/               # 辅助信息
+      rollover.csv      # 主力切换信息
+      contract_info.csv # 合约交割、保证金等信息
+
 
 # Q&A
 1. 波段/趋势起点如何选择？

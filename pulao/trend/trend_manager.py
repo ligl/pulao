@@ -65,7 +65,7 @@ class TrendManager(Observable):
         else:
             # 在趋势的中间
             first_trend.is_completed = False
-            cbar = self.swing_manager.get_nearby_swing(traceback_id, -1)
+            cbar = self.swing_manager.get_nearest_swing(traceback_id, -1)
             first_trend.end_id = cbar.id if cbar else None
             self._update_active_trend(id=first_trend.id, direction=first_trend.direction,
                               start_id=first_trend.start_id, end_id=first_trend.end_id,
@@ -77,7 +77,7 @@ class TrendManager(Observable):
         查找要从哪个swing开始回放处理，取值min(backtrack_id, trend.end_id)
         """
         # 2. 获取需要处理的swing[backtrack_id, last_id]，进行回放
-        swing_list = self.swing_manager.get_nearby_swing(backtrack_id)
+        swing_list = self.swing_manager.get_nearest_swing(backtrack_id)
         if swing_list is None:
             return
         for swing in swing_list:
@@ -91,9 +91,17 @@ class TrendManager(Observable):
         # 趋势
         # 定义：由波段的高低间关系构成
         # 判定标准:
+        # 1. 由最近的4个波段高低点，2高2低构建最近的趋势类型
+        # 2. 高点抬高，低点抬高 → 上涨趋势
+        # 3. 高点降低，低点降低 → 下降趋势
+        # 4. 高点和低点重叠错落，无明显趋势 → 横盘震荡区间
         # 执行流程：
+        # 1. 获取最近已完成的3个波段，判断趋势类型
+        # 3. 向前延伸寻找趋势的起点，是延续前一趋势，还是开启新的趋势
+        # Q&A：
+        # 1. 起点选择的问题？
         #
-        #
+
 
     def _del_active_trend(self):
         active_trend = self.get_active_trend()
