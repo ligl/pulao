@@ -5,7 +5,7 @@ from datetime import datetime as Datetime
 @dataclass
 class SBar:
     """
-    SuperBar , BarData扩展
+    Source/SuperBar , BarData扩展
     """
 
     id: int = None # 在SBarManager数据源中的索引，类似数据库中的自增id

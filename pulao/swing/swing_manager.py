@@ -25,10 +25,10 @@ class SwingManager(Observable):
             "direction": pl.Int8,
             "start_id": pl.UInt64,  # df_cbar id
             "end_id": pl.UInt64,  # 如果是active swing，end_id = 最新k线
+            "sbar_start_id": pl.UInt64,  # df_sbar id
+            "sbar_end_id": pl.UInt64,
             "high_price": pl.Float32,
             "low_price": pl.Float32,
-            "sbar_start_id": pl.UInt64,  # df_cbar id
-            "sbar_end_id": pl.UInt64,  # 如果是active swing，end_id = 最新k线
             "is_completed": pl.Boolean,  # 还未被确认的波段，即正在进行中的波段，在实时行情中尚未被确认
             "created_at": pl.Datetime("ms"),
         }

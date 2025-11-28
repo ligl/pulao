@@ -23,6 +23,8 @@ class TrendManager(Observable):
             "id": pl.UInt64,
             "start_id": pl.UInt64, # df_cbar id
             "end_id": pl.UInt64,  # 如果是active trend，end_id = 最新k线
+            "sbar_start_id": pl.UInt64,  # df_sbar id
+            "sbar_end_id": pl.UInt64,
             "high_price": pl.Float32,
             "low_price": pl.Float32,
             "direction": pl.Int8,
@@ -110,50 +112,35 @@ class TrendManager(Observable):
                 0, self.df_trend.height - 1
             )  # 删除未完成的趋势
 
-    def _append_trend(
-        self,
-        direction: Direction,
-        start_id: int,
-        end_id: int,
-        high_price: float,
-        low_price: float,
-        is_completed: bool
-    ):
+    def _append_trend(self, trend: Trend):
         new_trend = {
             "id": self.id_gen.get_id(),
-            "direction": direction.value,
-            "start_id": start_id,
-            "end_id": end_id,
-            "high_price": high_price,
-            "low_price": low_price,
-            "is_completed": is_completed,
+            "direction": trend.direction.value,
+            "start_id": trend.start_id,
+            "end_id": trend.end_id,
+            "sbar_start_id": trend.sbar_start_id,
+            "sbar_end_id": trend.sbar_end_id,
+            "high_price": trend.high_price,
+            "low_price": trend.low_price,
+            "is_completed": trend.is_completed,
             "created_at": Datetime.now(),
         }
-        if is_completed:
-            start_fractal = self.swing_manager.get_fractal(start_id)
-            end_fractal = self.swing_manager.get_fractal(end_id)
+        if trend.is_completed:
+            start_fractal = self.get_fractal(trend.start_id)
+            end_fractal = self.get_fractal(trend.end_id)
             if not start_fractal or not end_fractal:
                 logger.error(
-                    "趋势断定无效",
+                    "趋势断定无效，端点分形不符合标准",
                     trend=new_trend,
                     start_fractal=start_fractal,
                     end_fractal=end_fractal,
                 )
-                raise AssertionError("趋势断定无效")
+                raise AssertionError("波段断定无效")
         self.df_trend = self.df_trend.vstack(
             pl.DataFrame([new_trend], schema=self.df_trend.schema)
         )
 
-    def _update_active_trend(
-        self,
-        id: int,
-        direction: Direction,
-        start_id: int,
-        end_id: int,
-        high_price: float,
-        low_price: float,
-        is_completed: bool,
-    ):
+    def _update_active_trend(self, trend: Trend):
         """
         更新逻辑：先删除旧数据，再添加新数据，每条数据的id都不同
         """
@@ -161,10 +148,8 @@ class TrendManager(Observable):
         if self.df_trend.height > 0:
             self.df_trend = self.df_trend.slice(
                 0, self.df_trend.height - 1
-            )  # 删除原active trend，即最后一行
-        self._append_trend(
-            direction, start_id, end_id, high_price, low_price, is_completed
-        )
+            )  # 删除原active swing，即最后一行
+        self._append_trend(trend)
 
     def _determine_trend(
         self,

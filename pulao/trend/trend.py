@@ -14,6 +14,10 @@ class Trend:
     end_id: int = 0
     high_price: float = 0
     low_price: float = 0
+
+    sbar_start_id: int = None # sbar_df id
+    sbar_end_id: int = None
+
     is_completed: bool = False  # 趋势是否完成
     created_at: Datetime = None  # 创建时间
 
