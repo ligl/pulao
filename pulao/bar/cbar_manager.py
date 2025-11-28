@@ -250,6 +250,32 @@ class CBarManager(Observable):
 
         return [CBar(**row) for row in df.rows(named=True)]
 
+    def get_limit_cbar(self, start_id:int ,end_id:int, arg=str)->CBar | None:
+        """
+        获取一段区间[start_id, end_id]中的最高价或最低价，即max(high_price)或min(low_price)
+        :param start_id:
+        :param end_id:
+        :param arg: max or min
+        :return:
+        """
+        if arg not in ["max", "min"]:
+            return None
+        start_index = self.get_index(start_id)
+        end_index = self.get_index(end_id)
+        if start_index is None or end_index is None:
+            return None
+        if start_index > end_index: # 交换
+            start_index,end_index = end_index,start_index
+
+        df = self.df_cbar.slice(start_index, end_index - start_index + 1)
+        if df.is_empty():
+            return None
+        if arg == "max":
+            index = df["high_price"].arg_max()
+        else:
+            index = df["low_price"].arg_min()
+        return CBar(**df.row(index, named=True))
+
     def get_nearby_cbar(self, id:int, count:int=None) -> None | CBar | List[CBar]:
         """
         获取指定id向前/向后 count个cbar

@@ -36,12 +36,12 @@ class SwingManager(Observable):
     def _on_cbar_created(self, event: EventType, payload: Any):
         # 波段检测识别
         # logger.debug("_on_cbar_created", payload=payload)
-        # if payload["backtrack_id"] is None:
-        #     self._build_swing()
-        # else:
-        #     self._clean_reset(payload["backtrack_id"])
-        #     self._backtrack_replay(payload["backtrack_id"])
-        self._build_swing()
+        if payload is None or payload["backtrack_id"] is None:
+            self._build_swing()
+        else:
+            self._clean_reset(payload["backtrack_id"])
+            self._backtrack_replay(payload["backtrack_id"])
+        # self._build_swing()
 
         self.notify(EventType.SWING_CHANGED)
 
@@ -231,9 +231,19 @@ class SwingManager(Observable):
             active_swing=active_swing,
             prev_swing=last_completed_swing,
         ):  # 两个分形可以组成一个波段
-            # 下降波段中出顶分形或上升波段中出现底分形，说明波段在延续
             active_swing.end_id = curr_fractal.id  # 波段完成时
             active_swing.is_completed = True
+
+            # 调整波段起点的位置，确保是在波段区间内的极值位置
+            # TODO 是否还需要调整起点？如果要调整起点就需要连带调整前一波段的终点
+            if active_swing.direction == Direction.DOWN:
+                # 下降波段，波段终点是最低点所在k
+                cbar = self.cbar_manager.get_limit_cbar(active_swing.start_id, active_swing.end_id, "min")
+                active_swing.end_id = cbar.id
+            else:
+                # 上升波段，终点是最高点所在k
+                cbar = self.cbar_manager.get_limit_cbar(active_swing.start_id, active_swing.end_id,"max")
+                active_swing.end_id = cbar.id
 
             self._update_active_swing(
                 id=active_swing.id,
@@ -340,7 +350,7 @@ class SwingManager(Observable):
         判定两个分形是否能够组成波段
         """
         if start_fractal is None or end_fractal is None:
-            logger.error("_valid_swing 在调用_valid_swing方法时，参数值有None", active_swing=active_swing, prev_swing=prev_swing)
+            logger.error("_determine_swing 在调用_determine_swing方法时，参数值有None", active_swing=active_swing, prev_swing=prev_swing)
             raise AssertionError("start_fractal and end_fractal are both None")
 
         start_fractal_type = start_fractal.fractal_type()
@@ -350,16 +360,27 @@ class SwingManager(Observable):
             start_fractal_type == FractalType.NONE
             or end_fractal_type == FractalType.NONE
         ):
-            # logger.debug("_valid_swing 波段端点并非有效分形")
+            # logger.debug("_determine_swing 波段端点并非有效分形")
             return False
         if (
             start_fractal_type == end_fractal_type
         ):  # 同向分形不可能组成波段，必须是不同向分形才行
-            # logger.debug("_valid_swing 相邻同向分形，不能构成分形")
+            # logger.debug("_determine_swing 相邻同向分形，不能构成分形")
             return False
+        # 对波段顶底分形的位置进行判断，上升波段顶分形要在底分形之上，下降波段底分形要在顶分形之下
+        if active_swing.direction == Direction.UP:
+            if end_fractal.high_price < start_fractal.low_price:
+                logger.debug("_determine_swing 在上升波段中，终止分形比开始分形还低，不能形成波段", start_fractal=start_fractal, end_fractal=end_fractal, active_swing=active_swing)
+                return False
+        else:
+            if end_fractal.low_price > start_fractal.high_price:
+                logger.debug("_determine_swing 在下降波段中，终止分形比开始分形还高，不能形成波段",
+                             start_fractal=start_fractal, end_fractal=end_fractal,
+                             active_swing=active_swing)
+                return False
 
         if not start_fractal.overlap(end_fractal):  # 两个分形没有重叠可形成波段
-            logger.debug("_valid_swing 两个分形没有重叠可形成波段", start_fractal=start_fractal, end_fractal=end_fractal, active_swing=active_swing, prev_swing=prev_swing)
+            logger.debug("_determine_swing 两个分形没有重叠可形成波段", start_fractal=start_fractal, end_fractal=end_fractal, active_swing=active_swing, prev_swing=prev_swing)
             return True
         # TODO 可以添加波动率为准绳的条件
         # 如果分形之间有重叠，
@@ -368,7 +389,7 @@ class SwingManager(Observable):
         # 3）并且在包含合并处理之前的sbar中，间隔超过5根K线，
         # 那么，也视为波段成立（因为反抗力量确实也足够）
         if prev_swing is None:
-            logger.debug("_valid_swing prev_swing为None，波动率比较取消")
+            logger.debug("_determine_swing prev_swing为None，波动率比较取消")
             return False
         if start_fractal.overlap(end_fractal, is_strict=False):
             return False
@@ -406,7 +427,7 @@ class SwingManager(Observable):
     def get_index(self, id: int) -> int:
         return self.df_swing.select(pl.col("id").search_sorted(id)).item()
 
-    def get_nearby_swing(self, id:int, count:int=None) -> None | Swing | List[Swing]:
+    def get_nearest_swing(self, id:int, count:int=None) -> None | Swing | List[Swing]:
         """
         获取指定id向前/向后 count个swing
         :param id:
