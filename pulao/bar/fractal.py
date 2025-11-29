@@ -1,17 +1,19 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Tuple
+from typing import Tuple,Generic, TypeVar
 
 from pulao.bar import CBar
 from pulao.constant import FractalType
+from pulao.swing import Swing
 
+T = TypeVar('T', CBar, Swing)
 
 @dataclass
 class Fractal:
-    left: CBar
-    middle: CBar
-    right: CBar
+    left: T
+    middle: T
+    right: T
 
     def range(self) -> Tuple[float, float]:
         """
@@ -48,14 +50,17 @@ class Fractal:
         """
         left.start_index
         """
-        return self.left.start_id
+        return self.left.sbar_start_id
 
     @property
     def sbar_end_id(self) -> int:
         """
         right.end_index
         """
-        return self.right.end_id
+        return self.right.sbar_end_id
+
+    def sbar_middle_id(self):
+        return self.middle.sbar_start_id
 
     @property
     def high_price(self) -> float:
@@ -88,7 +93,7 @@ class Fractal:
         return Fractal.verify(self.left, self.middle, self.right, strict_model=strict_model)
 
     @classmethod
-    def verify(cls, left: CBar, middle: CBar, right: CBar, strict_model:bool = False) -> FractalType:
+    def verify(cls, left: T, middle: T, right: T, strict_model:bool = False) -> FractalType:
         """
         判断分形
         :param left: left cbar

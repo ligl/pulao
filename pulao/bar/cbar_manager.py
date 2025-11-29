@@ -20,8 +20,8 @@ class CBarManager(Observable):
         super().__init__()
         schema = {
             "id": pl.UInt64,
-            "start_id": pl.UInt64, # sbar_df id
-            "end_id": pl.UInt64,
+            "sbar_start_id": pl.UInt64, # sbar_df id
+            "sbar_end_id": pl.UInt64,
             "high_price": pl.Float32,
             "low_price": pl.Float32,
             "fractal_type": pl.Int8,
@@ -122,7 +122,7 @@ class CBarManager(Observable):
 
         if included:
             # 有包含关系 → 合并，且按已有趋势方向处理高低点
-            start_id = last_cbar.start_id
+            start_id = last_cbar.sbar_start_id
 
             if direction == Direction.UP:
                 merged_high = max(last_high, curr_high)
@@ -157,7 +157,7 @@ class CBarManager(Observable):
                     new_last.low_price,
                 ):
                     # 继续合并
-                    start_id = prev.start_id
+                    start_id = prev.sbar_start_id
                     if direction == Direction.UP:
                         merged_high = max(merged_high, prev.high_price)
                         merged_low = max(merged_low, prev.low_price)
@@ -183,8 +183,8 @@ class CBarManager(Observable):
     ):
         new_cbar = {
             "id": self.id_gen.get_id(),
-            "start_id": start_id,
-            "end_id": end_id,
+            "sbar_start_id": start_id,
+            "sbar_end_id": end_id,
             "high_price": high_price,
             "low_price": low_price,
             "fractal_type": fractal_type.value,
@@ -276,7 +276,10 @@ class CBarManager(Observable):
             index = df["low_price"].arg_min()
         return CBar(**df.row(index, named=True))
 
-    def get_nearby_cbar(self, id:int, count:int=None) -> None | CBar | List[CBar]:
+    def get_limit_sbar_id(self, start_id:int ,end_id:int, arg=str)->int | None:
+        return self.sbar_manager.get_limit_sbar_id(start_id, end_id, arg)
+
+    def get_nearest_cbar(self, id:int, count:int=None) -> None | CBar | List[CBar]:
         """
         获取指定id向前/向后 count个cbar
         :param id:

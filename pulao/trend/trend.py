@@ -6,12 +6,12 @@ from datetime import datetime as Datetime
 @dataclass
 class Trend:
     """
-    由波段高低点关系组成的趋势结构
+    一个方向上力量占优的波段序列，每个趋势至少包含3个有重叠的波段（允许更长波段序列）
     """
     id: int = None
     direction: Direction = None  # up / down / range
-    start_id: int = 0 # swing_df
-    end_id: int = 0
+    swing_start_id: int = None # swing_df
+    swing_end_id: int = None
     high_price: float = 0
     low_price: float = 0
 
@@ -39,4 +39,14 @@ class Trend:
         elif self.direction == Direction.DOWN:
             return (self.high_price - price) / span
         return (price - self.low_price) / span
+
+    @property
+    def opposite_direction(self):
+        """
+        获取波段对立的方向
+        """
+        if self.direction == Direction.UP:
+            return Direction.DOWN
+        else:
+            return Direction.UP
 

@@ -8,8 +8,8 @@ from datetime import datetime as Datetime
 @dataclass
 class CBar:
     id: int = None  # cbar_df primary key 类似数据库中的自增id
-    start_id: int = None  # sbar_df id
-    end_id: int = None
+    sbar_start_id: int = None  # sbar_df id
+    sbar_end_id: int = None
     high_price: float = 0
     low_price: float = 0
     created_at: Datetime = None # 创建时间

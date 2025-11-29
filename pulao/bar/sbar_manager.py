@@ -95,6 +95,38 @@ class SBarManager(Observable):
             return None
         return [SBar(**row) for row in df.rows(named=True)]
 
+    def get_limit_sbar(self, start_id:int ,end_id:int, arg=str)->SBar | None:
+        """
+        获取一段区间[start_id, end_id]中的最高价或最低价，即max(high_price)或min(low_price)
+        :param start_id:
+        :param end_id:
+        :param arg: max or min
+        :return:
+        """
+        if arg not in ["max", "min"]:
+            return None
+        start_index = self.get_index(start_id)
+        end_index = self.get_index(end_id)
+        if start_index is None or end_index is None:
+            return None
+        if start_index > end_index: # 交换
+            start_index,end_index = end_index,start_index
+
+        df = self.df_sbar.slice(start_index, end_index - start_index + 1)
+        if df.is_empty():
+            return None
+        if arg == "max":
+            index = df["high_price"].arg_max()
+        else:
+            index = df["low_price"].arg_min()
+        return SBar(**df.row(index, named=True))
+
+    def get_limit_sbar_id(self, start_id:int ,end_id:int, arg=str)->int | None:
+        sbar = self.get_limit_sbar(start_id, end_id, arg)
+        if sbar is None:
+            return None
+        return sbar.id
+
     @property
     def total_count(self):
         return self.df_sbar.height

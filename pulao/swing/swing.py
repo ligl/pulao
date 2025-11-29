@@ -1,3 +1,4 @@
+from __future__ import annotations
 from dataclasses import dataclass
 
 from pulao.constant import Direction
@@ -10,12 +11,12 @@ class Swing:
     """
     id: int = None # swing_df 中 自增id
     direction: Direction = None
-    start_id: int = None  # 波段起始点id cbar_df
-    end_id: int = None
+    cbar_start_id: int = None  # 波段起始点id cbar_df
+    cbar_end_id: int = None
+    sbar_start_id: int = None  # sbar_df id
+    sbar_end_id: int = None
     high_price: float = 0
     low_price: float = 0
-    sbar_start_id: int = None # sbar_df id
-    sbar_end_id: int = None
 
     is_completed: bool = False  # 波段是否完成
     created_at: Datetime = None  # 创建时间
@@ -40,4 +41,24 @@ class Swing:
             return Direction.DOWN
         else:
             return Direction.UP
+
+    def overlap(self, *others: Swing):
+        """
+         判断当前 Swing 与任意多个 Swing 是否有重叠
+        :param others: 一个或多个 Swing 对象
+        :return: True 或 False
+        """
+        if not others:
+            return False
+        # 当前 Swing 的 low/high
+        low_all = [self.low_price]
+        high_all = [self.high_price]
+        for other in others:
+            if other is None:
+                continue
+            low_all.append(other.low_price)
+            high_all.append(other.high_price)
+
+        # 最大低点 <= 最小高点 表示有重叠
+        return max(low_all) <= min(high_all)
 
