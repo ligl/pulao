@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, List
+from typing import Any, List, Literal
 
 from pulao.constant import (
     EventType,
@@ -254,7 +254,7 @@ class CBarManager(Observable):
 
         return [CBar(**row) for row in df.rows(named=True)]
 
-    def get_limit_cbar(self, start_id:int ,end_id:int, arg=str)->CBar | None:
+    def get_limit_cbar(self, start_id:int ,end_id:int, arg:Literal["max","min"])->CBar | None:
         """
         获取一段区间[start_id, end_id]中的最高价或最低价，即max(high_price)或min(low_price)
         :param start_id:
@@ -280,7 +280,7 @@ class CBarManager(Observable):
             index = df["low_price"].arg_min()
         return CBar(**df.row(index, named=True))
 
-    def get_limit_sbar_id(self, start_id:int ,end_id:int, arg=str)->int | None:
+    def get_limit_sbar_id(self, start_id:int ,end_id:int, arg:Literal["max","min"])->int | None:
         return self.sbar_manager.get_limit_sbar_id(start_id, end_id, arg)
 
     def get_nearest_cbar(self, id:int, count:int=None) -> None | CBar | List[CBar]:

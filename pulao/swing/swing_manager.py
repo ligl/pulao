@@ -1,9 +1,7 @@
-from typing import Any, List
+from typing import Any, List, Union, Literal
 
 import polars as pl
 from datetime import datetime as Datetime
-
-from httpx import delete
 
 from pulao.events import Observable
 from .swing import Swing
@@ -440,7 +438,7 @@ class SwingManager(Observable):
     def get_fractal(self, cbar_id: int) -> Fractal:
         return self.cbar_manager.get_fractal(cbar_id)
 
-    def get_limit_swing(self, start_id:int ,end_id:int, arg:str, direction:Direction)->Swing | None:
+    def get_limit_swing(self, start_id:int ,end_id:int, arg:Literal["max","min"], direction:Direction)->Swing | None:
         """
         获取一段区间[start_id, end_id]中在某个方向的最高价或最低价的波段，即max(high_price)或min(low_price)
         :param start_id:

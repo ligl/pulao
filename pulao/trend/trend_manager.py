@@ -1,5 +1,5 @@
 import copy
-from typing import Any, List
+from typing import Any, List, Optional
 
 import polars as pl
 from datetime import datetime as Datetime
@@ -17,6 +17,80 @@ from ..logging import logger
 from ..swing import SwingManager, Swing
 from ..utils import IDGenerator
 
+class _TrendSFSeq:
+    def __init__(self, sfs: List[Swing]=None, trend: Trend=None):
+        self.sfs:List[Swing] = sfs if sfs else []# 特征序列
+        self.trend:Trend = trend # 趋势
+
+    def __bool__(self):
+        return True if self.trend and self.sfs else False
+
+    def agg_swing(self, swing: Swing):
+        # 处理特征序列包含关系
+        if swing.direction == self.trend.direction:
+            return
+
+        tmp_swing = copy.deepcopy(swing)
+        while True:  # 循环往前处理包含
+            if not self.sfs:
+                break
+            prev_sf: Swing = self.sfs[-1]
+            # 判断个波段是否存在包含关系
+            is_inclusive = (prev_sf.high_price >= tmp_swing.high_price and prev_sf.low_price <= tmp_swing.low_price) or (
+                prev_sf.high_price <= tmp_swing.high_price and prev_sf.low_price >= tmp_swing.low_price
+            )
+            if is_inclusive:
+                # 有包含关系
+                if self.trend.direction == Direction.UP:
+                    tmp_swing.high_price = max(tmp_swing.high_price, prev_sf.high_price)
+                    tmp_swing.low_price = max(tmp_swing.low_price, prev_sf.low_price)
+                else:
+                    tmp_swing.high_price = min(tmp_swing.high_price, prev_sf.high_price)
+                    tmp_swing.low_price = min(tmp_swing.low_price, prev_sf.low_price)
+                self.sfs.pop()
+                logger.debug("特征序列发现包含关系", trend=self.trend,sfs=self.sfs)
+            else:
+                break
+        self.sfs.append(tmp_swing)  # 添加特征序列元素
+
+    def update_trend(self, last_swing: Swing):
+        if not self.trend: # 新建
+            self.trend = Trend()
+            self.trend.direction = last_swing.direction
+            self.trend.swing_start_id = last_swing.id
+            self.trend.sbar_start_id = last_swing.sbar_start_id
+            self.trend.is_completed = False
+        # 更新
+        self.trend.swing_end_id = last_swing.id
+        self.trend.sbar_end_id = last_swing.sbar_end_id
+        self.trend.high_price = max(last_swing.high_price, self.trend.high_price)
+        self.trend.low_price = min(last_swing.low_price, self.trend.low_price)
+
+    def get_fractal_type(self):
+        # 最后3个元素是否组成分形，第1和第2个元素之间是否有缺口
+        right_sf = self.sfs[-1] if len(self.sfs) >= 1 else None
+        mid_sf = self.sfs[-2] if len(self.sfs) >= 2 else None
+        left_sf = self.sfs[-3] if len(self.sfs) >= 3 else None
+
+        fractal_type = Fractal.verify(left_sf, mid_sf, right_sf)
+        return fractal_type
+
+    def has_gap(self):
+        # 组成的分形是否有缺口
+        right_sf = self.sfs[-1] if len(self.sfs) >= 1 else None
+        mid_sf = self.sfs[-2] if len(self.sfs) >= 2 else None
+        left_sf = self.sfs[-3] if len(self.sfs) >= 3 else None
+
+        fractal_type = Fractal.verify(left_sf, mid_sf, right_sf)
+        has_gap = False
+        if left_sf and mid_sf and right_sf:
+            has_gap = left_sf.high_price < mid_sf.low_price if fractal_type == FractalType.TOP else left_sf.low_price > mid_sf.high_price
+
+        return has_gap
+
+    def clear(self):
+        self.sfs = []
+        self.trend = None
 
 class TrendManager(Observable):
     def __init__(self, swing_manager: SwingManager):
@@ -37,8 +111,9 @@ class TrendManager(Observable):
         self.swing_manager: SwingManager = swing_manager
         self.swing_manager.subscribe(self._on_swing_changed)
         self.id_gen = IDGenerator()
-        self.sfs_trend = [] # 趋势的特征序列
-        self.sfs_opposite = [] # 反向趋势的特征序列
+        self.trend_sfs = _TrendSFSeq() # 趋势和趋势的特征序列
+        self.opposite_trend_sfs = _TrendSFSeq() # 反向趋势和特征序列
+
 
     def _on_swing_changed(self, event: EventType, payload: Any):
         # 趋势检测识别
@@ -143,94 +218,189 @@ class TrendManager(Observable):
                 logger.debug(
                     "首次创建趋势", new_trend=new_trend,
                 )
-                self.sfs_trend.append(swing_middle)
+                self.trend_sfs.clear()
+                self.trend_sfs.trend = new_trend
+                self.trend_sfs.agg_swing(swing_middle)
             return  # 首次尝试构建结构
 
-        # 已存在趋势，非首次构建
+        # 情况2. 已存在趋势，非首次构建
+        # region 算法说明
+        # 方法：特征序列判断趋势转折点
+        # 1. 特征序列sfs(Structural Feature Sequence)
+        # 1.1 上涨趋势由向下的波段组成特征序列，（下跌对称）
+        # 1.2 上涨趋势只考察特征序列的顶分形，顶分形的顶就是趋势转折点（下跌对称）
+        # 1.3 特征序列需要先按照K线合并的相同规则进行包含合并处理，形成标准特征序列（默认说特征序列指标准特征序列）
+        # 2. 特征序列判断方法以有无缺口分为两种情况：
+        # (以上涨为例)
+        # 2.1 分形第1根与第2根没有缺口
+        # 2.1.1 那么分形的顶点就是转折点
+        # 2.2 有缺口，那么需要以最高点为起点向下，建立新的特征序列，
+        # 2.2.1 如果后续出现底分形，则最高点为趋势的转折点
+        # 2.2.2 如果后续在价格创新高之前都没有出现底分形，则延续原有趋势
+        #
+        # endregion
         active_trend = self.get_active_trend()
         last_swing = self.swing_manager.get_last_swing()
 
-        # 情况2. 特征序列判断趋势转折点
-        # 特征序列sfs(Structural Feature Sequence)
-        # 上涨趋势由向下的波段组成特征序列，（下跌对称）
-        # 上涨趋势只考察特征序列的顶分形，顶分形的顶就是趋势转折点（下跌对称）
-        # 特征序列需要先按照K线合并的相同规则进行包含合并处理
-        # 特征序列判断方法分为两种情况：
-        # (以上涨为例)
-        # 1. 分形第1根与第2根没有缺口，那么分形的顶点就是转折点
-        # 2. 有缺口，那么需要以最高点为起点，建立新的特征序列，
-        # 2.1 如果出现底分形，则最高点为趋势的转折点
-        # 2.1 如果没有出现底分形，价格又超出趋势最高点，则延续原有趋势
-        #
+        # 上一个趋势结束时，正好是所有swing用完之时，这里需要以当前last_swing新建趋势
+        if active_trend is None:
+            new_trend = Trend(
+                direction=last_swing.direction,
+                swing_start_id=last_swing.id,
+                swing_end_id=last_swing.id,
+                sbar_start_id=last_swing.sbar_start_id,
+                sbar_end_id=last_swing.sbar_end_id,
+                high_price=last_swing.high_price,
+                low_price=last_swing.low_price,
+                is_completed=False,
+            )
+            self._append_trend(new_trend)
+            logger.debug("创建趋势[active_trend is None]", new_trend=new_trend)
+            return
 
-        if last_swing.direction != active_trend.direction:
-            # 特征序列合并处理
-            # 判断两根K线是否存在包含关系
-            def is_inclusive(a_high, a_low, b_high, b_low):
-                return (a_high >= b_high and a_low <= b_low) or (
-                    a_high <= b_high and a_low >= b_low
+        if self.opposite_trend_sfs:
+            # 1. 是否创前趋势新高
+            is_new_limit = False # 波段是否超越趋势极值点
+            if active_trend.direction == Direction.DOWN and last_swing.low_price < active_trend.low_price: # 下降趋势被创新低，原趋势active_trend延续
+                    # 更新
+                    is_new_limit = True
+            elif active_trend.direction == Direction.UP and last_swing.high_price > active_trend.high_price: # 上涨趋势被创新高，原趋势active_trend延续
+                    is_new_limit = True
+
+            if is_new_limit:
+                # 原趋势active_trend延续
+                self.trend_sfs.update_trend(last_swing)
+                self._update_active_trend(self.trend_sfs.trend)
+                # 清理opposite trend/sfs
+                self.opposite_trend_sfs.clear()
+                return
+
+            # 2. 特征序列包含合并处理
+            self.opposite_trend_sfs.agg_swing(last_swing)
+            # 3. 分形判断
+            fractal_type = self.opposite_trend_sfs.get_fractal_type()
+            if fractal_type == FractalType.NONE:
+                self.opposite_trend_sfs.update_trend(last_swing)
+
+                self.trend_sfs.update_trend(last_swing)
+                self._update_active_trend(self.trend_sfs.trend)
+                return
+            if ((self.opposite_trend_sfs.trend.direction == Direction.UP and fractal_type == FractalType.TOP)
+                or (self.opposite_trend_sfs.trend.direction == Direction.DOWN and fractal_type == FractalType.BOTTOM)):
+                # 1. 在前高点终结原趋势
+                end_swing = self.swing_manager.get_limit_swing(
+                    start_id=active_trend.swing_start_id,
+                    end_id=active_trend.swing_end_id,
+                    arg="max" if active_trend.direction == Direction.UP else "min",
+                    direction=active_trend.direction,
                 )
+                # 以end_swing为终点，结束原趋势
+                self._update_active_trend(active_trend)
+                self.trend_sfs.clear()
 
-            tmp_swing = copy.deepcopy(last_swing)
-            if self.sfs_trend:
-                while True: # 循环往前处理包含
-                    if not self.sfs_trend:
-                        break
-                    prev_sf:Swing = self.sfs_trend[-1]
-                    if is_inclusive(prev_sf.high_price, prev_sf.low_price, tmp_swing.high_price, tmp_swing.low_price):
-                        # 有包含关系
-                        if active_trend.direction == Direction.UP:
-                            tmp_swing.high_price = max(tmp_swing.high_price, prev_sf.high_price)
-                            tmp_swing.low_price = max(tmp_swing.low_price, prev_sf.low_price)
-                        else:
-                            tmp_swing.high_price = min(tmp_swing.high_price, prev_sf.high_price)
-                            tmp_swing.low_price = min(tmp_swing.low_price, prev_sf.low_price)
-                        self.sfs_trend.pop()
-                        logger.debug("特征序列发现包含关系",active_trend=active_trend,sfs=self.sfs_trend)
-                    else:
-                        break
-            self.sfs_trend.append(tmp_swing) # 添加特征序列元素
+                # 2. 此时，原趋势反向趋势opposite_trend也终结了
+                opposite_trend_start_swing = self.swing_manager.get_swing(self.opposite_trend_sfs.trend.swing_start_id)
+                opposite_trend_end_swing = self.swing_manager.get_limit_swing(
+                    start_id=opposite_trend_start_swing.id,
+                    end_id=last_swing.id,
+                    arg="max" if self.opposite_trend_sfs.trend.direction == Direction.UP else "min",
+                    direction=self.opposite_trend_sfs.trend.direction,
+                )
+                opposite_trend = Trend(
+                    direction=active_trend.opposite_direction,
+                    swing_start_id=opposite_trend_start_swing.id,
+                    swing_end_id=opposite_trend_start_swing.id,
+                    sbar_start_id=opposite_trend_start_swing.sbar_start_id,
+                    sbar_end_id=opposite_trend_end_swing.sbar_end_id,
+                    high_price=max(opposite_trend_start_swing.high_price, opposite_trend_end_swing.high_price),
+                    low_price=min(opposite_trend_start_swing.low_price, opposite_trend_end_swing.low_price),
+                    is_completed=True,
+                )
+                self._append_trend(opposite_trend)
+                self.opposite_trend_sfs.clear()
 
-        active_trend.swing_end_id = last_swing.id
-        active_trend.high_price = max(last_swing.high_price, active_trend.high_price)
-        active_trend.low_price = min(last_swing.low_price, active_trend.low_price)
-        active_trend.sbar_end_id = last_swing.sbar_end_id
+                # 3. 以opposite_trend终止点为起点创建新的active trend
+                new_active_trend_start_swing = self.swing_manager.get_limit_swing(
+                    start_id=opposite_trend.swing_end_id,
+                    end_id=last_swing.id,
+                    arg="max" if opposite_trend.direction == Direction.UP else "min",
+                    direction=opposite_trend.opposite_direction,
+                )
+                new_active_trend = Trend(
+                    direction=opposite_trend.opposite_direction,
+                    swing_start_id=new_active_trend_start_swing.id,
+                    swing_end_id=last_swing.id,
+                    sbar_start_id=new_active_trend_start_swing.sbar_start_id,
+                    sbar_end_id=last_swing.sbar_end_id,
+                    high_price=max(new_active_trend_start_swing.high_price,
+                                   last_swing.high_price),
+                    low_price=min(new_active_trend_start_swing.low_price,
+                                  last_swing.low_price),
+                    is_completed=False,
+                )
+                self._append_trend(new_active_trend)
+                return
+            return # 一旦有缺口，下面的逻辑就不能走了，要么创新极值延续原趋势，要么终结原趋势
+
+
+        self.trend_sfs.trend = active_trend
+        self.trend_sfs.agg_swing(last_swing)# 特征序列包含合并处理
+
+        # 最后3个元素是否组成分形，第1和第2个元素之间是否有缺口
+        fractal_type = self.trend_sfs.get_fractal_type()
 
         # 用特征序列判断趋势是否终结
-        if len(self.sfs_trend) < 3:
-            # 说明不会有分形，延续趋势
-            self._update_active_trend(active_trend)
-            return
-        # 最后3个元素是否组成分形，第1和第2个元素之间是否有缺口
-        right_sf = self.sfs_trend[-1]
-        mid_sf = self.sfs_trend[-2]
-        left_sf = self.sfs_trend[-3]
-
-        fractal_type = Fractal.verify(left_sf, mid_sf, right_sf)
-
         if fractal_type == FractalType.NONE:
             self._update_active_trend(active_trend)
             return
 
-        has_gap = left_sf.high_price < mid_sf.low_price if fractal_type == FractalType.TOP else left_sf.low_price > mid_sf.high_price
-
-        if has_gap:
-            pass
+        if self.trend_sfs.has_gap():
+            # 有缺口
+            # 2.2 有缺口，那么需要以最高点为起点向下，建立新的特征序列，
+            # 2.2.1 如果后续出现底分形，则最高点为趋势的转折点
+            # 2.2.2 如果后续在价格创新高之前都没有出现底分形，则延续原有趋势
+            start_swing = self.swing_manager.get_limit_swing(
+                start_id=active_trend.swing_start_id,
+                end_id=active_trend.swing_end_id,
+                arg="max" if active_trend.direction == Direction.UP else "min",
+                direction=active_trend.opposite_direction,
+            )
+            # 以limit_swing为起点，找与active_trend相反的趋势特征序列
+            opposite_trend = Trend(
+                direction=active_trend.opposite_direction,
+                swing_start_id=start_swing.id,
+                swing_end_id=last_swing.id,
+                sbar_start_id=start_swing.sbar_start_id,
+                sbar_end_id=last_swing.sbar_end_id,
+                high_price=max(start_swing.high_price,last_swing.high_price),
+                low_price=min(start_swing.low_price,last_swing.low_price),
+                is_completed=False,
+            )
+            self.opposite_trend_sfs.trend = opposite_trend
+            self.opposite_trend_sfs.agg_swing(start_swing)
         else:
             # 形成趋势转折点
+            active_trend.swing_end_id = last_swing.id
+            active_trend.high_price = max(last_swing.high_price, active_trend.high_price)
+            active_trend.low_price = min(last_swing.low_price, active_trend.low_price)
+            active_trend.sbar_end_id = last_swing.sbar_end_id
             active_trend.is_completed = True
+
             active_trend = self._normal_trend(active_trend)
             self._update_active_trend(active_trend)
-            logger.debug("趋势终止", active_trend = active_trend,)
+            logger.debug("趋势终结", active_trend=active_trend)
 
             start_swing = self.swing_manager.next_swing(active_trend.swing_end_id)
+            if start_swing is None:
+                logger.warning("已经没有swing了", current_swing=last_swing)
+                return
             new_trend = Trend(
                 direction=active_trend.opposite_direction,
                 swing_start_id=start_swing.id,
                 swing_end_id=last_swing.id,
                 sbar_start_id=start_swing.sbar_start_id,
                 sbar_end_id=last_swing.sbar_end_id,
-                high_price= active_trend.high_price if active_trend.direction == Direction.UP else last_swing.high_price,
+                high_price=active_trend.high_price if active_trend.direction == Direction.UP else last_swing.high_price,
                 low_price=last_swing.low_price if active_trend.direction == Direction.UP else active_trend.low_price,
                 is_completed=False,
             )
@@ -238,8 +408,6 @@ class TrendManager(Observable):
             self._append_trend(new_trend)
             logger.debug("创建新趋势", new_trend=new_trend,
                          last_swing=last_swing)
-
-            self.sfs_trend.clear()  # 清空特征序列
 
     def _normal_trend(self, trend: Trend)-> Trend:
         """
