@@ -3,6 +3,8 @@ from typing import Any, List
 import polars as pl
 from datetime import datetime as Datetime
 
+from httpx import delete
+
 from pulao.events import Observable
 from .swing import Swing
 from ..bar import CBarManager, Fractal, CBar
@@ -35,53 +37,52 @@ class SwingManager(Observable):
         self.cbar_manager: CBarManager = cbar_manager
         self.cbar_manager.subscribe(self._on_cbar_created)
         self.id_gen = IDGenerator()
+        self.backtrack_id = None  # swing变动之后，告诉订阅者，从哪个swing id开始重新计算，大于等于此id的都要被重新计算
 
     def _on_cbar_created(self, event: EventType, payload: Any):
+        self.backtrack_id = None
         # 波段检测识别
         # logger.debug("_on_cbar_created", payload=payload)
-        if payload is None or payload["backtrack_id"] is None:
+        if not payload or payload["backtrack_id"] is None:
             self._build_swing()
         else:
             self._clean_reset(payload["backtrack_id"])
             self._backtrack_replay(payload["backtrack_id"])
         # self._build_swing()
         self.write_parquet()
-        self.notify(EventType.SWING_CHANGED)
+        self.notify(EventType.SWING_CHANGED,dict(backtrack_id=self.backtrack_id))
 
-    def _clean_reset(self, traceback_id: int):
+    def _clean_reset(self, cbar_backtrack_id: int):
         # 1. 清理df_swing
         df = self.df_swing.filter(
-            (pl.col("cbar_start_id") <= traceback_id) & (traceback_id <= pl.col("cbar_end_id"))
+            (pl.col("cbar_start_id") <= cbar_backtrack_id) & (cbar_backtrack_id <= pl.col("cbar_end_id"))
         )
         if df.is_empty():
             return
-        # 只有一种情况会出现两条数据，即traceback_id是一个波的终点，同时又是另一个波段的起点
-        first_swing = Swing(**df.row(0, named=True))
-        first_swing_index = self.get_index(first_swing.id)
-        if df.height > 1:
-            # 删除traceback_id之后的数据
-            logger.debug(
-                "_clean_swing 删除traceback_id之后的数据",
-                traceback_id=traceback_id,
-                first_swing=first_swing,
-                first_swing_index=first_swing_index,
-            )
-            self.df_swing = self.df_swing.slice(0, first_swing_index + 1)
-        if first_swing.cbar_start_id == traceback_id:  # 说明只有一个波段的时候
-            logger.debug(
-                "_clean_swing 清空波段，重新构建",
-                first_swing=first_swing,
-                first_swing_index=first_swing_index,
-            )
-            self.df_swing = self.df_swing.slice(0, first_swing_index)
-        else:
-            # 在波段的中间
-            first_swing.is_completed = False
-            cbar = self.cbar_manager.get_nearest_cbar(traceback_id, -1)
-            if cbar:
-                first_swing.cbar_end_id = cbar.id
-                first_swing.sbar_end_id = cbar.sbar_end_id
-            self._update_active_swing(first_swing)
+
+        del_swing = Swing(**df.row(0, named=True))
+        del_swing_idx = self.get_index(del_swing.id)
+
+        self.df_swing = self.df_swing.slice(0, del_swing_idx)  # 删除从第一个traceback_id出现时的波段
+
+        # 取出删除之前最后处理的cbar,填补swing信息
+        end_bar = self.cbar_manager.get_nearest_cbar(cbar_backtrack_id, -1)
+        logger.debug("swing中需删除backtrack_id后，重新开始的位置", end_bar=end_bar)
+        if end_bar:  # 如果end_bar为None，说明df_cbar在traceback_id之前已没有数据，重新构建波段
+            # 不为None，修改del_swing并重新添加到df_swing
+            if del_swing.cbar_start_id == cbar_backtrack_id: # 在波段起点
+                del_swing.cbar_start_id = end_bar.id
+                del_swing.sbar_start_id = end_bar.sbar_start_id
+
+            del_swing.cbar_end_id = end_bar.id
+            del_swing.sbar_end_id = end_bar.sbar_end_id
+            del_swing.high_price = max(del_swing.high_price, end_bar.high_price)
+            del_swing.low_price = min(del_swing.low_price, end_bar.low_price)
+            del_swing.is_completed = False
+            self._append_swing(del_swing)
+
+        self.backtrack_id = del_swing.id
+
 
     def _backtrack_replay(self, backtrack_id: int = None):
         """
@@ -89,9 +90,7 @@ class SwingManager(Observable):
         """
         # 2. 获取需要处理的cbar[backtrack_id, last_id]，进行回放
         cbar_list = self.cbar_manager.get_nearest_cbar(backtrack_id)
-        if cbar_list is None:
-            return
-        for cbar in cbar_list:
+        for cbar in cbar_list or []:
             self._build_swing(cbar)
 
     def _build_swing(self, cbar: CBar = None):
@@ -294,6 +293,7 @@ class SwingManager(Observable):
     def _del_active_swing(self):
         active_swing = self.get_active_swing()
         if active_swing:
+            self.backtrack_id = min(active_swing.id,self.backtrack_id) if self.backtrack_id else active_swing.id
             self.df_swing = self.df_swing.slice(
                 0, self.df_swing.height - 1
             )  # 删除未完成的波段
@@ -332,6 +332,8 @@ class SwingManager(Observable):
         """
         # 先删除再添加
         if self.df_swing.height > 0:
+            del_swing_id = self.df_swing.tail(1).select(pl.col("id")).item()
+            self.backtrack_id = min(del_swing_id,self.backtrack_id) if self.backtrack_id else del_swing_id
             self.df_swing = self.df_swing.slice(
                 0, self.df_swing.height - 1
             )  # 删除原active swing，即最后一行
@@ -486,8 +488,12 @@ class SwingManager(Observable):
             # 如果未完成，那么最后一个波段就是active swing
             return last_swing
 
-    def get_index(self, id: int) -> int:
-        return self.df_swing.select(pl.col("id").search_sorted(id)).item()
+    def get_index(self, id: int) -> int | None:
+        idx = self.df_swing.select(pl.col("id").search_sorted(id)).item()
+        if idx >= self.df_swing.height or self.df_swing["id"][idx] != id:
+            return None
+        else:
+            return idx
 
     def get_nearest_swing(
         self, id: int, count: int = None
@@ -498,29 +504,33 @@ class SwingManager(Observable):
         :param count: 正数向后，负数向前，None:获取到结尾
         :return:
         """
-        index = self.get_index(id)
-        if index is None:
+        idx = self.df_swing.select(pl.col("id").search_sorted(id)).item()
+        if idx is None or idx >= self.df_swing.height:
             return None
+
+        is_return_single = (count == 1 or count == -1) if count else False
+
         if count is None:
             count = self.df_swing.height - 1
         if count < 0:  # 向前
             count = -count  # 变成正数
-            end_index = index - 1
+            end_index = idx - 1
             start_index = end_index - count + 1
         else:  # 向后
-            start_index = index + 1
+            start_index = idx + 1
             end_index = start_index + count - 1
 
         if start_index < 0:
             start_index = 0
-            end_index = index - 1
-        if end_index <= 0:
+            end_index = idx - 1
+        if end_index < 0:
             return None
 
         df = self.df_swing.slice(start_index, end_index - start_index + 1)
         if df.is_empty():
             return None
-        if count == 1:
+
+        if is_return_single:
             return Swing(**df.row(0, named=True))
 
         return [Swing(**row) for row in df.rows(named=True)]

@@ -106,6 +106,6 @@ class EventType(BaseEnum):
     Event事件类型
     """
     SBAR_CREATED = "bar.created"
-    CBAR_CREATED = "cbar.created"
+    CBAR_CHANGED = "cbar.changed"
     SWING_CHANGED = "swing.changed"
     TREND_CHANGED = "trend.changed"

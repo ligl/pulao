@@ -43,48 +43,43 @@ class TrendManager(Observable):
     def _on_swing_changed(self, event: EventType, payload: Any):
         # 趋势检测识别
         # logger.debug("_on_cbar_created", payload=payload)
-        # if payload["backtrack_id"] is None:
-        #     self._build_trend()
-        # else:
-        #     self._clean_reset(payload["backtrack_id"])
-        #     self._backtrack_replay(payload["backtrack_id"])
-        self._build_trend()
+        if not payload or payload["backtrack_id"] is None:
+            self._build_trend()
+        else:
+            self._clean_reset(payload["backtrack_id"])
+            self._backtrack_replay(payload["backtrack_id"])
 
-    def _clean_reset(self, traceback_id: int):
+    def _clean_reset(self, swing_backtrack_id: int):
         # 1. 清理df_trend
         df = self.df_trend.filter(
-            (pl.col("swing_start_id") <= traceback_id) & (traceback_id <= pl.col("swing_end_id"))
+            (pl.col("swing_start_id") <= swing_backtrack_id) & (
+                swing_backtrack_id <= pl.col("swing_end_id"))
         )
         if df.is_empty():
             return
-        # 只有一种情况会出现两条数据，即traceback_id是一个趋势的终点，同时又是另一个趋势的起点
-        first_trend = Trend(**df.row(0, named=True))
-        first_trend_index = self.get_index(first_trend.id)
-        if df.height > 1:
-            # 删除traceback_id之后的数据
-            logger.debug(
-                "_clean_trend 删除traceback_id之后的数据",
-                traceback_id=traceback_id,
-                first_trend=first_trend,
-                first_trend_index=first_trend_index,
-            )
-            self.df_trend = self.df_trend.slice(0, first_trend_index + 1)
-        if first_trend.swing_start_id == traceback_id:  # 说明只有一个趋势的时候
-            logger.debug(
-                "_clean_trend 清空趋势，重新构建",
-                first_trend=first_trend,
-                first_trend_index=first_trend_index,
-            )
-            self.df_trend = self.df_trend.slice(0, first_trend_index)
-        else:
-            # 在趋势的中间
-            first_trend.is_completed = False
-            swing = self.swing_manager.get_nearest_swing(traceback_id, -1)
-            if swing:
-                first_trend.swing_end_id = swing.id
-                first_trend.sbar_start_id = swing.sbar_start_id
-                first_trend.sbar_end_id = swing.sbar_end_id
-            self._update_active_trend(first_trend)
+
+        del_trend = Trend(**df.row(0, named=True))
+        del_trend_idx = self.get_index(del_trend.id)
+
+        self.df_trend = self.df_trend.slice(0, del_trend_idx)  # 删除从第一个traceback_id出现时的数据
+
+        # 取出删除之前最后处理的swing,填补tend信息
+        end_swing = self.swing_manager.get_nearest_swing(swing_backtrack_id, -1)
+
+        if end_swing:  # 如果end_swing为None，说明df_swing在traceback_id之前已没有数据，重新构建趋势
+            # 不为None，修改del_trend并重新添加到df_trend
+            if del_trend.swing_start_id == swing_backtrack_id:  # 在波段起点
+                del_trend.swing_start_id = end_swing.id
+                del_trend.swing_start_id = end_swing.sbar_start_id
+
+            del_trend.swing_end_id = end_swing.id
+            del_trend.sbar_end_id = end_swing.sbar_end_id
+            del_trend.high_price = max(del_trend.high_price, end_swing.high_price)
+            del_trend.low_price = min(del_trend.low_price, end_swing.low_price)
+            del_trend.is_completed = False
+            self._append_trend(del_trend)
+
+        self.backtrack_id = del_trend.id
 
     def _backtrack_replay(self, backtrack_id: int = None):
         """
@@ -92,9 +87,7 @@ class TrendManager(Observable):
         """
         # 2. 获取需要处理的swing[backtrack_id, last_id]，进行回放
         swing_list = self.swing_manager.get_nearest_swing(backtrack_id)
-        if swing_list is None:
-            return
-        for swing in swing_list:
+        for swing in swing_list or []:
             self._build_trend(swing)
 
     def _build_trend(self, curr_swing: Swing = None):
@@ -320,8 +313,12 @@ class TrendManager(Observable):
             # 如果未完成，那么最后一个趋势就是active trend
             return last_trend
 
-    def get_index(self, id: int) -> int:
-        return self.df_trend.select(pl.col("id").search_sorted(id)).item()
+    def get_index(self, id: int) -> int | None:
+        idx = self.df_trend.select(pl.col("id").search_sorted(id)).item()
+        if idx >= self.df_trend.height or self.df_trend["id"][idx] != id:
+            return None
+        else:
+            return idx
 
     def get_trend(self, id: int = None, is_completed: bool = None) -> Trend | None:
         """

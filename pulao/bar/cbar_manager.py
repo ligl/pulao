@@ -31,7 +31,7 @@ class CBarManager(Observable):
         self.sbar_manager: SBarManager = sbar_manager
         self.sbar_manager.subscribe(self._on_sbar_created)
         self.id_gen = IDGenerator()
-        self.backtrack_id = None # 合并之后，从哪个k线开始重新计算
+        self.backtrack_id = None # 合并之后，从哪个k线开始重新计算，大于等于此id的都要被重新计算
 
     def _on_sbar_created(self, event: EventType, sbar: Any):
         # 1. K线包含处理
@@ -40,8 +40,8 @@ class CBarManager(Observable):
         self._detect_fractal()
         # 3. save to parquet
         self.write_parquet()
-
-        self.notify(EventType.CBAR_CREATED, dict(backtrack_id=self.backtrack_id))
+        # 4. 通知订阅者，数据变动
+        self.notify(EventType.CBAR_CHANGED, dict(backtrack_id=self.backtrack_id))
 
     def write_parquet(self):
         # TODO 实时行情不能这么做，需要考虑性能影响
@@ -132,7 +132,7 @@ class CBarManager(Observable):
                 merged_low = min(last_low, curr_low)
 
             # 移除最后一条（因为要被合并替换）
-            self.backtrack_id = last_cbar.id
+            self.backtrack_id = min(last_cbar.id,self.backtrack_id) if self.backtrack_id else last_cbar.id
             self.df_cbar = self.df_cbar.slice(0, self.df_cbar.height - 1)
 
             # 关键：可能还需要向前继续合并！
@@ -165,7 +165,7 @@ class CBarManager(Observable):
                         merged_high = min(merged_high, prev.high_price)
                         merged_low = min(merged_low, prev.low_price)
                     # 删除倒数第二根（现在成了最后）
-                    self.backtrack_id = new_last.id
+                    self.backtrack_id = min(new_last.id,self.backtrack_id) if self.backtrack_id else new_last.id
                     self.df_cbar = self.df_cbar.slice(0, self.df_cbar.height - 1)
                 else:
                     break
@@ -221,8 +221,12 @@ class CBarManager(Observable):
                 return
             self.df_cbar[index,"fractal_type"] = fractal_type.value
 
-    def get_index(self, id: int) -> int:
-        return self.df_cbar.select(pl.col("id").search_sorted(id)).item()
+    def get_index(self, id: int) -> int | None:
+        idx = self.df_cbar.select(pl.col("id").search_sorted(id)).item()
+        if idx >= self.df_cbar.height or self.df_cbar["id"][idx] != id:
+            return None
+        else:
+            return idx
 
     def get_last_cbar(self, count:int = None) -> List[CBar] | CBar | None:
         if count is None:
@@ -286,29 +290,30 @@ class CBarManager(Observable):
         :param count: 正数向后，负数向前，None:获取到结尾
         :return: None | CBar | List[CBar]
         """
-        index = self.get_index(id)
-        if index is None:
+        idx = self.df_cbar.select(pl.col("id").search_sorted(id)).item()
+        if idx is None or idx >= self.df_cbar.height:
             return None
+        is_return_single = (count == 1 or count == -1) if count else False
         if count is None:
             count = self.df_cbar.height - 1
-        if count < 0: # 向前
+        if count < 0:  # 向前
             count = -count  # 变成正数
-            end_index = index - 1
+            end_index = idx - 1
             start_index = end_index - count + 1
-        else: # 向后
-            start_index = index + 1
+        else:  # 向后
+            start_index = idx + 1
             end_index = start_index + count - 1
 
         if start_index < 0:
             start_index = 0
-            end_index = index - 1
-        if end_index <= 0:
+            end_index = idx - 1
+        if end_index < 0:
             return None
 
         df = self.df_cbar.slice(start_index, end_index - start_index + 1)
         if df.is_empty():
             return None
-        if count == 1:
+        if is_return_single:
             return CBar(**df.row(0, named=True))
 
         return [CBar(**row) for row in df.rows(named=True)]

@@ -76,8 +76,12 @@ class SBarManager(Observable):
         self.notify(EventType.SBAR_CREATED, sbar)
         return sbar.id
 
-    def get_index(self, id: int) -> int:
-        return self.df_sbar.select(pl.col("id").search_sorted(id)).item()
+    def get_index(self, id: int) -> int | None:
+        idx = self.df_sbar.select(pl.col("id").search_sorted(id)).item()
+        if idx is None or self.df_sbar["id"][idx] != id:
+            return None
+        else:
+            return idx
 
     def get_at_id(self, id: int) -> SBar:
         return self.get_at_index(self.get_index(id))
