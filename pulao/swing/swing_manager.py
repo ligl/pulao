@@ -540,7 +540,7 @@ class SwingManager(Observable):
         if include_active:
             df = self.df_swing.tail(count)
         else:
-            df = self.df_swing.tail(Const.LOOKBACK_LIMIT).filter(pl.col("is_completed"==True))
+            df = self.df_swing.tail(Const.LOOKBACK_LIMIT).filter(pl.col("is_completed")==True).tail(count)
 
         if df.is_empty():
             return None
