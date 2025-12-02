@@ -57,6 +57,15 @@ class Direction(BaseEnum):
     UP = 1
     DOWN = -1
     RANGE = 2
+    NONE = 0
+    @property
+    def opposite(self):
+        if self == Direction.UP:
+            return Direction.DOWN
+        elif self == Direction.DOWN:
+            return Direction.UP
+        else:
+            return Direction.NONE
 
 class DecisionAction(BaseEnum):
     """

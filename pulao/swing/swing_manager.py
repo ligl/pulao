@@ -44,13 +44,13 @@ class SwingManager(Observable):
         if not payload or payload["backtrack_id"] is None:
             self._build_swing()
         else:
-            self._clean_reset(payload["backtrack_id"])
+            self._clean_backtrack(payload["backtrack_id"])
             self._backtrack_replay(payload["backtrack_id"])
         # self._build_swing()
         self.write_parquet()
         self.notify(EventType.SWING_CHANGED,dict(backtrack_id=self.backtrack_id))
 
-    def _clean_reset(self, cbar_backtrack_id: int):
+    def _clean_backtrack(self, cbar_backtrack_id: int):
         # 1. 清理df_swing
         df = self.df_swing.filter(
             (pl.col("cbar_start_id") <= cbar_backtrack_id) & (cbar_backtrack_id <= pl.col("cbar_end_id"))
