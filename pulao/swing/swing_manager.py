@@ -34,7 +34,7 @@ class SwingManager(Observable):
         self.df_swing: pl.DataFrame = pl.DataFrame(schema=schema)
         self.cbar_manager: CBarManager = cbar_manager
         self.cbar_manager.subscribe(self._on_cbar_created)
-        self.id_gen = IDGenerator()
+        self.id_gen = IDGenerator(worker_id=1)
         self.backtrack_id = None  # swing变动之后，告诉订阅者，从哪个swing id开始重新计算，大于等于此id的都要被重新计算
 
     def _on_cbar_created(self, event: EventType, payload: Any):
@@ -46,7 +46,6 @@ class SwingManager(Observable):
         else:
             self._clean_backtrack(payload["backtrack_id"])
             self._backtrack_replay(payload["backtrack_id"])
-        # self._build_swing()
         self.write_parquet()
         self.notify(EventType.SWING_CHANGED,dict(backtrack_id=self.backtrack_id))
 
@@ -670,3 +669,14 @@ class SwingManager(Observable):
         if df.is_empty():
             return None
         return [Swing(**row) for row in df.rows(named=True)]
+
+    def pretty_worker_id(self):
+        return self.df_swing.with_columns(
+            [
+                ((pl.col("id") // (2 ** 12)) % (2 ** 10)).alias("worker_id_swing"),
+                ((pl.col("cbar_start_id") // (2**12)) % (2**10)).alias("worker_id_cbar_start"),
+                ((pl.col("cbar_end_id") // (2**12)) % (2**10)).alias("worker_id_cbar_end"),
+                ((pl.col("sbar_start_id") // (2 ** 12)) % (2 ** 10)).alias("worker_id_sbar_start"),
+                ((pl.col("sbar_end_id") // (2 ** 12)) % (2 ** 10)).alias("worker_id_sbar_end"),
+            ]
+        )

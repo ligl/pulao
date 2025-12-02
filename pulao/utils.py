@@ -55,3 +55,27 @@ class IDGenerator:
     # 批量生成 ID（适合 Polars 构造列）
     def get_ids(self, n: int):
         return [self.get_id() for _ in range(n)]
+
+    def pretty_id(self, id: int) -> str:
+        """
+        以 41-10-12 结构分段显示 Snowflake ID 的二进制表示
+        """
+        b = f"{id:064b}"
+        ts_bits = b[:41]
+        worker_bits = b[41:51]
+        seq_bits = b[51:]
+        return f"{ts_bits}_{worker_bits}_{seq_bits}"
+
+    def debug_id(self, id: int):
+        """
+        解析 Snowflake ID，输出 timestamp / worker_id / sequence
+        """
+        sequence = id & ((1 << self.sequence_bits) - 1)
+        worker_id = (id >> self.worker_id_shift) & ((1 << self.worker_id_bits) - 1)
+        timestamp_ms = (id >> self.timestamp_shift) + self.epoch
+
+        print(f"ID: {id}")
+        print(f"binary: {self.pretty_id(id)}")
+        print(f"timestamp(ms): {timestamp_ms}")
+        print(f"worker_id: {worker_id}")
+        print(f"sequence: {sequence}")
