@@ -40,13 +40,3 @@ class Trend:
             return (self.high_price - price) / span
         return (price - self.low_price) / span
 
-    @property
-    def opposite_direction(self):
-        """
-        获取波段对立的方向
-        """
-        if self.direction == Direction.UP:
-            return Direction.DOWN
-        else:
-            return Direction.UP
-

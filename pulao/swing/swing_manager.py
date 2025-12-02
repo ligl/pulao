@@ -241,7 +241,7 @@ class SwingManager(Observable):
             # 说明当前波段已经完成，需要以终止点为新的起点构建active_swing
             # 开始一个新波段
             new_swing = Swing(
-                direction=active_swing.opposite_direction,
+                direction=active_swing.direction.opposite,
                 cbar_start_id=active_swing.cbar_end_id,
                 cbar_end_id=last_bar.id,
                 sbar_start_id=active_swing.sbar_end_id,

@@ -32,16 +32,6 @@ class Swing:
     def contains(self, price: float) -> bool:
         return self.low_price <= price <= self.high_price
 
-    @property
-    def opposite_direction(self):
-        """
-        获取波段对立的方向
-        """
-        if self.direction == Direction.UP:
-            return Direction.DOWN
-        else:
-            return Direction.UP
-
     def overlap(self, *others: Swing):
         """
          判断当前 Swing 与任意多个 Swing 是否有重叠

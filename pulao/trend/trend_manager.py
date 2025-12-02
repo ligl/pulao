@@ -126,7 +126,7 @@ class _TrendSFSeq:
         pullback_trend = _TrendSFSeq(self.trend_manager)
 
         pullback_trend.trend = Trend(
-            direction=self.trend.opposite_direction,
+            direction=self.trend.direction.opposite,
             swing_start_id=limit_swing.id,
             swing_end_id=self.trend.swing_end_id,
             sbar_start_id=limit_swing.sbar_start_id,
@@ -249,7 +249,7 @@ class TrendManager(Observable):
             # 检查波段方向是否符合要求：上下上或下上下
             if (
                 not swing_start.direction
-                == swing_middle.opposite_direction
+                == swing_middle.direction.opposite
                 == swing_end.direction
             ):
                 return
@@ -342,11 +342,11 @@ class TrendManager(Observable):
                 arg="max"
                 if self.active_trend_sfs.trend.direction == Direction.UP
                 else "min",
-                direction=self.active_trend_sfs.trend.opposite_direction,
+                direction=self.active_trend_sfs.trend.direction.opposite,
             )
             # 以pullback_start_swing为起点，找与active_trend相反的趋势特征序列
             pullback_trend = Trend(
-                direction=self.active_trend_sfs.trend.opposite_direction,
+                direction=self.active_trend_sfs.trend.direction.opposite,
                 swing_start_id=pullback_start_swing.id,
                 swing_end_id=last_swing.id,
                 sbar_start_id=pullback_start_swing.sbar_start_id,
@@ -373,7 +373,7 @@ class TrendManager(Observable):
                 self.active_trend_sfs.trend.swing_end_id
             )
             new_trend = Trend(
-                direction=self.active_trend_sfs.trend.opposite_direction,
+                direction=self.active_trend_sfs.trend.direction.opposite,
                 swing_start_id=new_trend_start_swing.id,
                 swing_end_id=last_swing.id,
                 sbar_start_id=new_trend_start_swing.sbar_start_id,
@@ -470,7 +470,7 @@ class TrendManager(Observable):
                     self.pullback_trend_sfs.trend.swing_end_id
                 )
                 new_trend = Trend(
-                    direction=self.pullback_trend_sfs.trend.opposite_direction,
+                    direction=self.pullback_trend_sfs.trend.direction.opposite,
                     swing_start_id=new_trend_start_swing.id,
                     swing_end_id=last_swing.id,
                     sbar_start_id=new_trend_start_swing.sbar_start_id,
