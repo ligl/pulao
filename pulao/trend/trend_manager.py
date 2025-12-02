@@ -116,35 +116,50 @@ class _TrendSFSeq:
         以波段极值点为标准，把self拆分成active trend/sfs 和 pullback trend/sfs
         :return:
         """
-        limit_swing = self.trend_manager.swing_manager.get_limit_swing(
+        # 首先要确定是否有pullback_trend ，条件：active_trend中的分形有缺口
+        pullback_trend_sfs = _TrendSFSeq(self.trend_manager)
+        has_gap = False
+        for swing in self.sfs:
+            if self.has_gap():
+                has_gap = True
+                break
+
+        if not has_gap:
+            return pullback_trend_sfs
+
+        pullback_start_swing = self.trend_manager.swing_manager.get_limit_swing(
             start_id=self.trend.swing_start_id,
             end_id=self.trend.swing_end_id,
-            arg="max" if self.trend.direction == Direction.UP else "min",
-            direction=self.trend.direction,
-        )
-
-        pullback_trend = _TrendSFSeq(self.trend_manager)
-
-        pullback_trend.trend = Trend(
+            arg="max"
+            if self.trend.direction == Direction.UP
+            else "min",
             direction=self.trend.direction.opposite,
-            swing_start_id=limit_swing.id,
+        )
+        if not pullback_start_swing:
+            logger.warning("pullback_start_swing is None", pp_trend=self.trend)
+        # 以pullback_start_swing为起点，找与active_trend相反的趋势特征序列
+        pullback_trend_sfs.trend = Trend(
+            direction=self.trend.direction.opposite,
+            swing_start_id=pullback_start_swing.id,
             swing_end_id=self.trend.swing_end_id,
-            sbar_start_id=limit_swing.sbar_start_id,
+            sbar_start_id=pullback_start_swing.sbar_start_id,
             sbar_end_id=self.trend.sbar_end_id,
-            high_price=limit_swing.high_price,
-            low_price=limit_swing.low_price,
+            high_price=pullback_start_swing.high_price,
+            low_price=pullback_start_swing.low_price,
             is_completed=False,
         )
 
-        swing_list = self.trend_manager.swing_manager.get_swing_list(limit_swing.id, self.trend.swing_end_id)
+        pullback_swing_list = self.trend_manager.swing_manager.get_swing_list(
+            pullback_trend_sfs.trend.swing_start_id,
+            pullback_trend_sfs.trend.swing_end_id,
+        )
+        for swing in pullback_swing_list or []:  # 特征序列初始化
+            pullback_trend_sfs.agg_swing(swing)
+            pullback_trend_sfs.trend.high_price = max(swing.high_price, pullback_trend_sfs.trend.high_price)
+            pullback_trend_sfs.trend.low_price = min(swing.low_price, pullback_trend_sfs.trend.low_price)
 
-        for swing in swing_list or []:
-            pullback_trend.agg_swing(swing)
-            pullback_trend.trend.high_price = max(swing.high_price, pullback_trend.trend.high_price)
-            pullback_trend.trend.low_price = min(swing.low_price, pullback_trend.trend.low_price)
 
-        return pullback_trend
-
+        return pullback_trend_sfs
 
 
 class TrendManager(Observable):
@@ -168,15 +183,19 @@ class TrendManager(Observable):
         self.id_gen = IDGenerator()
         self.active_trend_sfs = _TrendSFSeq(self)  # 趋势和趋势的特征序列
         self.pullback_trend_sfs = _TrendSFSeq(self)  # 反向趋势和特征序列
+        self.swing_backtrack_id = None
 
     def _on_swing_changed(self, event: EventType, payload: Any):
         # 趋势检测识别
         # logger.debug("_on_cbar_created", payload=payload)
+        self.swing_backtrack_id = payload
         if not payload or payload["backtrack_id"] is None:
             self._build_trend()
         else:
             self._clean_backtrack(payload["backtrack_id"])
             self._backtrack_replay(payload["backtrack_id"])
+        # self._clean_backtrack(payload["backtrack_id"])
+        self.write_parquet()
 
     def _clean_backtrack(self, swing_backtrack_id: int):
         # 1. 清理df_trend
@@ -210,14 +229,29 @@ class TrendManager(Observable):
             del_trend.is_completed = False
             self._append_trend(del_trend)
 
+        if swing_backtrack_id:
+            df = self.df_trend.filter(
+                (pl.col("swing_start_id") <= swing_backtrack_id)
+                & (swing_backtrack_id <= pl.col("swing_end_id"))
+            )
+            if not df.is_empty():
+                logger.warning("怎么还有没有删除的backtrack_id", swing_backtrack_id=swing_backtrack_id)
+                assert  1==2
 
         # 2. 清理并重新构建辅助对象
-        last_trend = self.get_trend()
-        self.active_trend_sfs.clean_rebuild(last_trend)
-        self.pullback_trend_sfs.clean_rebuild(last_trend)
+        last_trend = self.get_active_trend()
+        if last_trend:
+            self.active_trend_sfs.clean_rebuild(last_trend)
+            self.pullback_trend_sfs = self.active_trend_sfs.split_pullback_trend()
+        else:
+            self.active_trend_sfs.clear()
+            self.pullback_trend_sfs.clear()
+
 
         # 3. 记录df_trend的变化点
         self.backtrack_id = del_trend.id
+
+
 
     def _backtrack_replay(self, backtrack_id: int = None):
         """
@@ -336,33 +370,7 @@ class TrendManager(Observable):
         # active trend特征序列出现分形
         if self.active_trend_sfs.has_gap():
             # 有缺口，记录回调趋势的起始点
-            pullback_start_swing = self.swing_manager.get_limit_swing(
-                start_id=self.active_trend_sfs.trend.swing_start_id,
-                end_id=self.active_trend_sfs.trend.swing_end_id,
-                arg="max"
-                if self.active_trend_sfs.trend.direction == Direction.UP
-                else "min",
-                direction=self.active_trend_sfs.trend.direction.opposite,
-            )
-            # 以pullback_start_swing为起点，找与active_trend相反的趋势特征序列
-            pullback_trend = Trend(
-                direction=self.active_trend_sfs.trend.direction.opposite,
-                swing_start_id=pullback_start_swing.id,
-                swing_end_id=last_swing.id,
-                sbar_start_id=pullback_start_swing.sbar_start_id,
-                sbar_end_id=last_swing.sbar_end_id,
-                high_price=max(pullback_start_swing.high_price, last_swing.high_price),
-                low_price=min(pullback_start_swing.low_price, last_swing.low_price),
-                is_completed=False,
-            )
-            self.pullback_trend_sfs.trend = pullback_trend
-            pullback_swing_list = self.swing_manager.get_swing_list(
-                pullback_trend.swing_start_id,
-                pullback_trend.swing_end_id,
-                include_active=False,
-            )
-            for swing in pullback_swing_list or []:  # 特征序列初始化
-                self.pullback_trend_sfs.agg_swing(swing)
+            self.pullback_trend_sfs = self.active_trend_sfs.split_pullback_trend()
         else:
             # 形成趋势转折点
             # 1. 终结原趋势active trend
@@ -574,6 +582,9 @@ class TrendManager(Observable):
         self.df_trend = self.df_trend.vstack(
             pl.DataFrame([new_trend], schema=self.df_trend.schema)
         )
+        #TEST
+        if self.swing_manager.get_swing(new_trend["swing_start_id"]) is None or self.swing_manager.get_swing(new_trend["swing_end_id"]) is None:
+            assert  1==2
         return Trend(**new_trend)
 
     def _update_active_trend(self, trend: Trend):
@@ -752,3 +763,16 @@ class TrendManager(Observable):
         return self.swing_manager.get_swing_list(
             trend.swing_start_id, trend.swing_end_id
         )
+
+    def write_parquet(self):
+        # TODO 实时行情不能这么做，需要考虑性能影响
+        self.df_trend.write_parquet(
+            "./trend_data.parquet",
+            compression="zstd",
+            compression_level=3,
+            statistics=False
+        )
+
+    def read_parquet(self):
+        self.df_trend = pl.read_parquet("./trend_data.parquet")
+        return self.df_trend

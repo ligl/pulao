@@ -121,7 +121,7 @@ class SwingManager(Observable):
             )  # 有需要回话的情况
 
         if cbar_list is None or len(cbar_list) != 3:
-            logger.warning(
+            logger.info(
                 "用于组成分形的cbar数量不够",
                 cbar_count=len(cbar_list) if cbar_list else 0,
             )
@@ -169,13 +169,6 @@ class SwingManager(Observable):
 
         # 在当前波段未终结前，任何一个时刻都有可能打破前完成波段，使其重新延续
         if last_completed_swing:
-            if not last_completed_swing.is_completed:
-                logger.error(
-                    "不应该出现last_completed_swing is not completed",
-                    last_completed_swing=last_completed_swing,
-                )
-                raise AssertionError("不应该出现last_completed_swing is not completed")
-
             if last_completed_swing.direction == Direction.DOWN:
                 if last_bar.low_price < last_completed_swing.low_price:
                     # 新bar比下降波段的最低价还低，重新延续波段
