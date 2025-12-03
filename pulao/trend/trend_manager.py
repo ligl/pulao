@@ -370,8 +370,10 @@ class TrendManager(Observable):
                 self.active_trend_sfs.trend.swing_end_id
             )
             if not new_trend_start_swing:
-                logger.debug("next_swing is None,不应该出现的情况", start_swing=new_trend_start_swing, new_trend_direction= self.active_trend_sfs.trend.direction.opposite)
-                assert 1==2
+                self.pullback_trend_sfs.clear()
+                self.active_trend_sfs.clear()
+                logger.debug("next_swing is None,不应该出现的情况，只有完成波段被重新破坏且是最后一根，正好还是趋势开始的时候出现", start_swing=new_trend_start_swing, new_trend_direction= self.active_trend_sfs.trend)
+                return
 
             new_trend = Trend(
                 direction=self.active_trend_sfs.trend.direction.opposite,
