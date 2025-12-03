@@ -137,8 +137,7 @@ class _TrendSFSeq:
             arg="max" if self.trend.direction == Direction.UP else "min",
             direction=self.trend.direction.opposite,
         )
-        if not pullback_start_swing:
-            logger.warning("pullback_start_swing is None", pp_trend=self.trend)
+
         # 以pullback_start_swing为起点，找与active_trend相反的趋势特征序列
         pullback_trend_sfs.trend = Trend(
             direction=self.trend.direction.opposite,
@@ -349,19 +348,18 @@ class TrendManager(Observable):
 
         self.active_trend_sfs.update_trend(last_swing)
         self.active_trend_sfs.agg_swing(last_swing)  # 特征序列包含合并处理
+        self._update_active_trend(self.active_trend_sfs.trend)
 
         # 最后3个元素是否组成分形，第1和第2个元素之间是否有缺口
         fractal_type = self.active_trend_sfs.get_fractal_type()
 
         # 用特征序列判断趋势是否终结
         if fractal_type == FractalType.NONE:
-            self._update_active_trend(self.active_trend_sfs.trend)
             return
         # active trend特征序列出现分形
         if self.active_trend_sfs.has_gap():
             # 有缺口，记录回调趋势的起始点
             self.pullback_trend_sfs = self.active_trend_sfs.split_pullback_trend()
-            self._update_active_trend(self.active_trend_sfs.trend)
         else:
             # 形成趋势转折点
             # 1. 终结原趋势active trend
@@ -372,7 +370,9 @@ class TrendManager(Observable):
                 self.active_trend_sfs.trend.swing_end_id
             )
             if not new_trend_start_swing:
-                new_trend_start_swing = self.swing_manager.get_active_swing()
+                logger.debug("next_swing is None,不应该出现的情况", start_swing=new_trend_start_swing, new_trend_direction= self.active_trend_sfs.trend.direction.opposite)
+                assert 1==2
+
             new_trend = Trend(
                 direction=self.active_trend_sfs.trend.direction.opposite,
                 swing_start_id=new_trend_start_swing.id,
@@ -512,6 +512,7 @@ class TrendManager(Observable):
         :param trend:
         :return:
         """
+        logger.debug("调整高点低前的趋势", origin_trend=trend)
         trend.is_completed = True
         # 有可能需要调整趋势的起始点，比如上涨趋势，期间还有波段低点比起始点还低，此时就要调整1）本趋势的起点，2）前一趋势的终止点
         start_swing = self.swing_manager.get_limit_swing(
@@ -529,10 +530,12 @@ class TrendManager(Observable):
             trend.low_price = min(start_swing.low_price, trend.low_price)
 
             # 2). 调整前一趋势的终点
-            prev_trend = self.prev_trend(trend.id)
+            # 前一趋势即active trend之前完成的最后一个趋势
+            prev_trend = self.get_trend(is_completed=True)
+            logger.debug("需要调整当前趋势的起点，以及前一趋势的终点", active_trend=trend, prev_trend=prev_trend)
             if prev_trend:
                 prev_end_swing = self.swing_manager.prev_swing(
-                    start_swing.id
+                    trend.swing_start_id
                 )  # 前一个趋势的终点就是当前趋势起点的前一个swing
                 if prev_trend.swing_end_id != prev_end_swing.id:
                     prev_trend.swing_end_id = prev_end_swing.id
@@ -613,6 +616,12 @@ class TrendManager(Observable):
             return last_trend
 
     def _del_trend(self, start_id: int, end_id: int = None):
+        """
+        删除指定区间[start_id,end_id]的趋势，如果end_id没有指定，则删除到末尾
+        :param start_id:
+        :param end_id:
+        :return:
+        """
         if end_id is None:
             self.df_trend = self.df_trend.filter(~(pl.col("id") >= start_id))
         else:
