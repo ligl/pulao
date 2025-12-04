@@ -92,13 +92,11 @@ class KeyZoneOrigin(BaseEnum):
     ATR = "atr"  # 波动率（ATR 区）
     VOLUME_NODE = "volume_node"  # 成交量节点（POC / value area）
     CANDLE_ACTION = "candle_action"  # K线行为区（长影线、多次测试）
-    NONE = ""  # 未知
 
 class KeyZoneOrientation(BaseEnum):
     HORIZONTAL = 1
     TRENDLINE = 2
     CHANNEL = 3
-    NONE = 0
 
 class EventType(BaseEnum):
     """

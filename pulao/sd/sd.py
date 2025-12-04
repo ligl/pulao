@@ -1,4 +1,4 @@
-from pulao.key_zone import KeyZone
+from pulao.keyzone import KeyZone
 from pulao.object import BaseDecorator
 
 

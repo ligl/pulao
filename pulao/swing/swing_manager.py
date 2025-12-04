@@ -1,4 +1,4 @@
-from typing import Any, List, Union, Literal
+from typing import Any, List, Literal
 
 import polars as pl
 from datetime import datetime as Datetime
@@ -459,7 +459,7 @@ class SwingManager(Observable):
             index = df["low_price"].arg_min()
         return Swing(**df.row(index, named=True))
 
-    def get_limit_swing_id(self, start_id:int ,end_id:int, arg:str, direction:Direction)->int | None:
+    def get_limit_swing_id(self, start_id:int ,end_id:int, arg:Literal["max","min"], direction:Direction)->int | None:
         swing = self.get_limit_swing(start_id, end_id, arg, direction)
         if swing is None:
             return None
