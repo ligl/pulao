@@ -7,7 +7,7 @@ from pulao.indicator import IndicatorManager, EmaIndicator
 from .sbar import SBar
 import polars as pl
 
-from ..constant import EventType
+from ..constant import EventType, Timeframe
 from ..utils import IDGenerator
 from datetime import datetime as Datetime
 
@@ -24,7 +24,7 @@ class SBarManager(Observable):
             "datetime": pl.Datetime,
             "symbol": pl.Utf8,
             "exchange": pl.Utf8,
-            "interval": pl.Utf8,
+            "timeframe": pl.Utf8,
             "open_price": pl.Float32,
             "high_price": pl.Float32,
             "low_price": pl.Float32,
@@ -54,7 +54,7 @@ class SBarManager(Observable):
             "id": sbar.id,
             "symbol": sbar.symbol,
             "exchange": sbar.exchange,
-            "interval": sbar.interval,
+            "timeframe": sbar.timeframe.value,
             "datetime": sbar.datetime,
             "volume": sbar.volume,
             "open_interest": sbar.open_interest,
@@ -73,7 +73,7 @@ class SBarManager(Observable):
                 orient="row",
             )
         )  # append row
-        self.notify(EventType.SBAR_CREATED, sbar)
+        self.notify(sbar.timeframe,EventType.SBAR_CREATED,sbar = sbar)
         return sbar.id
 
     def get_index(self, id: int) -> int | None:

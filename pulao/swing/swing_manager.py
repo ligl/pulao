@@ -10,7 +10,7 @@ from ..constant import (
     EventType,
     Direction,
     FractalType,
-    Const,
+    Const, Timeframe,
 )
 from ..logging import logger
 from ..utils import IDGenerator
@@ -37,17 +37,19 @@ class SwingManager(Observable):
         self.id_gen = IDGenerator(worker_id=4)
         self.backtrack_id = None  # swing变动之后，告诉订阅者，从哪个swing id开始重新计算，大于等于此id的都要被重新计算
 
-    def _on_cbar_created(self, event: EventType, payload: Any):
+    def _on_cbar_created(self, event: EventType, timeframe:Timeframe, payload: Any):
         self.backtrack_id = None
+        cbar_backtrack_id = payload.get("backtrack_id",None)
         # 波段检测识别
+
         # logger.debug("_on_cbar_created", payload=payload)
-        if not payload or payload["backtrack_id"] is None:
+        if cbar_backtrack_id is None:
             self._build_swing()
         else:
-            self._clean_backtrack(payload["backtrack_id"])
-            self._backtrack_replay(payload["backtrack_id"])
+            self._clean_backtrack(cbar_backtrack_id)
+            self._backtrack_replay(cbar_backtrack_id)
         self.write_parquet()
-        self.notify(EventType.SWING_CHANGED,dict(backtrack_id=self.backtrack_id))
+        self.notify(timeframe,EventType.SWING_CHANGED,backtrack_id=self.backtrack_id)
 
     def _clean_backtrack(self, cbar_backtrack_id: int):
         # 1. 清理df_swing

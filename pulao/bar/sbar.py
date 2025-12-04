@@ -2,6 +2,9 @@ from dataclasses import dataclass
 
 from datetime import datetime as Datetime
 
+from pulao.constant import Timeframe
+
+
 @dataclass
 class SBar:
     """
@@ -12,7 +15,7 @@ class SBar:
 
     symbol: str = None
     exchange: str = None
-    interval: str = None
+    timeframe: Timeframe = None
 
     datetime: Datetime = None
     volume: float = 0
@@ -27,6 +30,10 @@ class SBar:
     ema_long: float = 0
 
     created_at: Datetime = None
+
+    def __post_init__(self):
+        if isinstance(self.timeframe, str):
+            self.timeframe = Timeframe(self.timeframe)
 
     @property
     def body(self) -> float:

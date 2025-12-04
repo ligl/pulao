@@ -12,7 +12,7 @@ from ..constant import (
     EventType,
     Direction,
     FractalType,
-    Const,
+    Const, Timeframe,
 )
 from ..logging import logger
 from ..swing import SwingManager, Swing
@@ -187,16 +187,19 @@ class TrendManager(Observable):
         self.id_gen = IDGenerator(worker_id=3)
         self.active_trend_sfs = _TrendSFSeq(self)  # 趋势和趋势的特征序列
         self.pullback_trend_sfs = _TrendSFSeq(self)  # 反向趋势和特征序列
+        self.backtrack_id = None
 
-    def _on_swing_changed(self, event: EventType, payload: Any):
+    def _on_swing_changed(self, event: EventType, timeframe:Timeframe, payload: Any):
         # 1. 趋势检测识别
-        if not payload or payload["backtrack_id"] is None:
+        swing_backtrack_id = payload.get("backtrack_id", None)
+        if swing_backtrack_id is None:
             self._build_trend()
         else:
-            self._clean_backtrack(payload["backtrack_id"])
-            self._backtrack_replay(payload["backtrack_id"])
+            self._clean_backtrack(swing_backtrack_id)
+            self._backtrack_replay(swing_backtrack_id)
         # 2. 保存结果
         self.write_parquet()
+        self.notify(timeframe,EventType.TREND_CHANGED, backtrack_id=self.backtrack_id)
 
     def _clean_backtrack(self, swing_backtrack_id: int):
         # 1. 清理df_trend

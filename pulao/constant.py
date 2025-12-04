@@ -78,24 +78,9 @@ class DecisionAction(BaseEnum):
     WAIT = "wait"
 
 
-class KeyZoneType(BaseEnum):
-    """
-    KeyZone 的类别或功能类型，比如 support、resistance、oscillation 等，决定 KeyZone 在分析和逻辑上的行为
-    """
-    SUPPORT = "support"  # 支撑
-    RESISTANCE = "resistance"  # 阻力
-    COUNTER_PRESSURE = "counter_pressure"  # 反压位
-    PULLBACK = "pullback"  # 回踩位
-    BREAKOUT = "breakout"  # 突破位
-    REVERSAL = "reversal"  # 反转点
-    SUPPLY_DEMAND = "supply_demand"  # 供需区
-    RANGE_BORDER = "range_border"  # 区间边界
-    UNKNOWN = "unknown"  # 未知
-
-
 class KeyZoneOrigin(BaseEnum):
     """
-    KeyZone 的来源或生成逻辑，比如 from_trend、from_swing、from_manual，帮助追踪这个区域是通过哪种方式产生的（便于管理、更新或过滤）
+    KeyZone 产生的结构来源
     """
     MAJOR_SWING = "major_swing"  # 主波段
     SECONDARY_SWING = "secondary_swing"  # 次级波段
@@ -107,8 +92,13 @@ class KeyZoneOrigin(BaseEnum):
     ATR = "atr"  # 波动率（ATR 区）
     VOLUME_NODE = "volume_node"  # 成交量节点（POC / value area）
     CANDLE_ACTION = "candle_action"  # K线行为区（长影线、多次测试）
-    UNKNOWN = "unknown"  # 未知
+    NONE = ""  # 未知
 
+class KeyZoneOrientation(BaseEnum):
+    HORIZONTAL = 1
+    TRENDLINE = 2
+    CHANNEL = 3
+    NONE = 0
 
 class EventType(BaseEnum):
     """
@@ -118,3 +108,13 @@ class EventType(BaseEnum):
     CBAR_CHANGED = "cbar.changed"
     SWING_CHANGED = "swing.changed"
     TREND_CHANGED = "trend.changed"
+
+class Timeframe(BaseEnum):
+    """
+    时间周期
+    """
+    M1 = "1m"
+    M5 = "5m"
+    M15 = "15m"
+    H1 = "1h"
+    D1 = "1d"

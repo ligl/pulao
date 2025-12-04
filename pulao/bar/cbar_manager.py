@@ -4,7 +4,7 @@ from typing import Any, List, Literal
 
 from pulao.constant import (
     EventType,
-    Direction, FractalType, Const,
+    Direction, FractalType, Const, Timeframe,
 )
 from pulao.events import Observable
 from pulao.bar import SBar, SBarManager, CBar, Fractal
@@ -33,15 +33,15 @@ class CBarManager(Observable):
         self.id_gen = IDGenerator(worker_id=1)
         self.backtrack_id = None # 合并之后，从哪个k线开始重新计算，大于等于此id的都要被重新计算
 
-    def _on_sbar_created(self, event: EventType, sbar: Any):
+    def _on_sbar_created(self, event: EventType, timeframe: Timeframe, payload: Any):
         # 1. K线包含处理
-        self._agg_bar(sbar)
+        self._agg_bar(payload.get("sbar"))
         # 2. 分形检测
         self._detect_fractal()
         # 3. save to parquet
         self.write_parquet()
         # 4. 通知订阅者，数据变动
-        self.notify(EventType.CBAR_CHANGED, dict(backtrack_id=self.backtrack_id))
+        self.notify(timeframe,EventType.CBAR_CHANGED, backtrack_id=self.backtrack_id)
 
     def write_parquet(self):
         # TODO 实时行情不能这么做，需要考虑性能影响

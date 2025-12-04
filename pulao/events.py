@@ -1,8 +1,8 @@
 from typing import Callable, Any, List
 
-from pulao.constant import EventType, Const
+from pulao.constant import EventType, Timeframe
 
-Subscriber = Callable[[EventType, Any], None]
+Subscriber = Callable[[EventType,Timeframe, Any], None]
 
 
 class Observable:
@@ -19,14 +19,6 @@ class Observable:
         if fn in self._subscribers:
             self._subscribers.remove(fn)
 
-    def notify(self, event_type: EventType, payload: Any = None) -> None:
+    def notify(self, timeframe:Timeframe, event_type: EventType,  **kwargs) -> None:
         for fn in list(self._subscribers):
-            if Const.DEBUG:
-                fn(event_type, payload)
-            else:
-                try:
-                    fn(event_type, payload)
-                except Exception:
-                    import traceback
-
-                    traceback.print_exc()
+            fn(event_type, timeframe, kwargs)
