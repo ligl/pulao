@@ -7,7 +7,7 @@ from datetime import datetime as Datetime
 
 from pulao.events import Observable
 from .trend import Trend
-from ..bar import Fractal
+from ..bar.fractal import Fractal
 from ..constant import (
     EventType,
     Direction,
@@ -15,7 +15,8 @@ from ..constant import (
     Const, Timeframe,
 )
 from ..logging import logger
-from ..swing import SwingManager, Swing
+from ..swing.swing import Swing
+from ..swing.swing_manager import SwingManager
 from ..utils import IDGenerator
 
 

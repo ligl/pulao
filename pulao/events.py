@@ -20,5 +20,5 @@ class Observable:
             self._subscribers.remove(fn)
 
     def notify(self, timeframe:Timeframe, event_type: EventType, **kwargs) -> None:
-        for fn in list(self._subscribers):
+        for fn in self._subscribers:
             fn(timeframe, event_type, kwargs)

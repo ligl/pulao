@@ -1,7 +1,7 @@
 from typing import Optional, List
 
 from .indicator_base import BaseIndicator
-from pulao.bar import SBar
+from ..bar.sbar import SBar
 
 
 class AtrIndicator(BaseIndicator):

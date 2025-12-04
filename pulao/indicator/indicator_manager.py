@@ -6,7 +6,7 @@ from typing import Any, Dict, List
 import polars as pl
 
 from .atr import AtrIndicator
-from pulao.bar import SBar
+from ..bar.sbar import SBar
 
 class IndicatorManager:
     """Manage a set of indicators for a single symbol/series.

@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import Any, List
 
 from pulao.object import BaseDecorator
-from pulao.bar import SBar
+from ..bar.sbar import SBar
 
 
 # -----------------------------

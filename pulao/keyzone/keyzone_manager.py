@@ -4,7 +4,6 @@ from pulao.constant import EventType, Timeframe
 from pulao.events import Observable
 from pulao.logging import logger
 from pulao.mtc import MultiTimeframeContext
-from pulao.trend import TrendManager, Trend
 import polars as pl
 
 from pulao.utils import IDGenerator
@@ -40,6 +39,7 @@ class KeyZoneManager(Observable):
         self.id_gen = IDGenerator(worker_id=5)
 
     def _on_mtc(self, timeframe:Timeframe, event: EventType, payload: Any):
+
         logger.debug(f"_on_mtc: {timeframe}, {event}, {payload}")
 
     def write_parquet(self):

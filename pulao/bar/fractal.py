@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Tuple,Generic, TypeVar
+from typing import Tuple, TypeVar
 
-from pulao.bar import CBar
+from .cbar import CBar
 from pulao.constant import FractalType
-from pulao.swing import Swing
+from ..swing.swing import Swing
 
 T = TypeVar('T', CBar, Swing)
 

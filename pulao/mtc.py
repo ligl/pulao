@@ -1,10 +1,11 @@
 from typing import Optional, Any
 
-from pulao.bar import SBarManager, CBarManager
+from pulao.bar.sbar_manager import SBarManager
+from pulao.bar.cbar_manager import CBarManager
 from pulao.constant import Timeframe, EventType
 from pulao.events import Observable
-from pulao.swing import SwingManager
-from pulao.trend import TrendManager
+from pulao.swing.swing_manager import SwingManager
+from pulao.trend.trend_manager import TrendManager
 
 
 class MultiTimeframeContext(Observable):
@@ -23,20 +24,20 @@ class MultiTimeframeContext(Observable):
                                       cbar_manager=cbar_manager,
                                       swing_manager=swing_manager,
                                       trend_manager=trend_manager)
-        sbar_manager or sbar_manager.subscribe(self._on_sbar)
-        cbar_manager or cbar_manager.subscribe(self._on_cbar)
-        swing_manager or swing_manager.subscribe(self._on_swing)
-        trend_manager or trend_manager.subscribe(self._on_trend)
+        sbar_manager.subscribe(self._on_sbar)
+        cbar_manager.subscribe(self._on_cbar)
+        swing_manager.subscribe(self._on_swing)
+        trend_manager.subscribe(self._on_trend)
 
     def unregister(self, timeframe:Timeframe):
         del self.tf_mgr[timeframe]
 
     # ------- 事件接口（从各周期结构流接收新事件） -------
     def _on_sbar(self, timeframe:Timeframe, event: EventType, payload: Any):
-      self.notify( timeframe, event, **payload)
+        self.notify( timeframe, event, **payload)
 
     def _on_cbar(self,timeframe:Timeframe, event: EventType, payload: Any):
-      self.notify( timeframe, event, **payload)
+        self.notify( timeframe, event, **payload)
 
     def _on_swing(self, timeframe:Timeframe, event: EventType,  payload: Any):
         self.notify( timeframe, event, **payload)
@@ -50,7 +51,7 @@ class MultiTimeframeContext(Observable):
         raise NotImplementedError()
 
     # ------- 最高层接口（给 keyzone / supply / decision） -------
-    def get_context(self, trading_period: str):
+    def get_context(self):
         """
         返回：一个“快照”结构，包含交易周期及其上下级周期的结构信息
         """
