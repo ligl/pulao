@@ -40,7 +40,7 @@ class SBarManager(Observable):
         self.indicator_manager: IndicatorManager = IndicatorManager()
         self.indicator_manager.register(EmaIndicator(20))
         self.indicator_manager.register(EmaIndicator(60))
-        self.id_gen = IDGenerator()
+        self.id_gen = IDGenerator(worker_id=0)
 
     def append(self, sbar: SBar) -> int:
         # 为sbar设置index，唯一的

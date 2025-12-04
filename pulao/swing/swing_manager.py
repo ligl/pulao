@@ -34,7 +34,7 @@ class SwingManager(Observable):
         self.df_swing: pl.DataFrame = pl.DataFrame(schema=schema)
         self.cbar_manager: CBarManager = cbar_manager
         self.cbar_manager.subscribe(self._on_cbar_created)
-        self.id_gen = IDGenerator(worker_id=1)
+        self.id_gen = IDGenerator(worker_id=4)
         self.backtrack_id = None  # swing变动之后，告诉订阅者，从哪个swing id开始重新计算，大于等于此id的都要被重新计算
 
     def _on_cbar_created(self, event: EventType, payload: Any):

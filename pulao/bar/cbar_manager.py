@@ -30,7 +30,7 @@ class CBarManager(Observable):
         self.df_cbar: pl.DataFrame = pl.DataFrame(schema=schema)  # 包含合并后的k线列表
         self.sbar_manager: SBarManager = sbar_manager
         self.sbar_manager.subscribe(self._on_sbar_created)
-        self.id_gen = IDGenerator()
+        self.id_gen = IDGenerator(worker_id=1)
         self.backtrack_id = None # 合并之后，从哪个k线开始重新计算，大于等于此id的都要被重新计算
 
     def _on_sbar_created(self, event: EventType, sbar: Any):

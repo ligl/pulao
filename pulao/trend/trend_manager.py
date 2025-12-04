@@ -184,7 +184,7 @@ class TrendManager(Observable):
         self.df_trend: pl.DataFrame = pl.DataFrame(schema=schema)
         self.swing_manager: SwingManager = swing_manager
         self.swing_manager.subscribe(self._on_swing_changed)
-        self.id_gen = IDGenerator(worker_id=2)
+        self.id_gen = IDGenerator(worker_id=3)
         self.active_trend_sfs = _TrendSFSeq(self)  # 趋势和趋势的特征序列
         self.pullback_trend_sfs = _TrendSFSeq(self)  # 反向趋势和特征序列
 
