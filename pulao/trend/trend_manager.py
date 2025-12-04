@@ -7,7 +7,7 @@ from datetime import datetime as Datetime
 
 from pulao.events import Observable
 from .trend import Trend
-from ..bar import Fractal, CBar
+from ..bar import Fractal
 from ..constant import (
     EventType,
     Direction,
@@ -183,13 +183,13 @@ class TrendManager(Observable):
         }
         self.df_trend: pl.DataFrame = pl.DataFrame(schema=schema)
         self.swing_manager: SwingManager = swing_manager
-        self.swing_manager.subscribe(self._on_swing_changed)
+        self.swing_manager.subscribe(self._on_swing)
         self.id_gen = IDGenerator(worker_id=3)
         self.active_trend_sfs = _TrendSFSeq(self)  # 趋势和趋势的特征序列
         self.pullback_trend_sfs = _TrendSFSeq(self)  # 反向趋势和特征序列
         self.backtrack_id = None
 
-    def _on_swing_changed(self, event: EventType, timeframe:Timeframe, payload: Any):
+    def _on_swing(self, timeframe:Timeframe, event: EventType, payload: Any):
         # 1. 趋势检测识别
         swing_backtrack_id = payload.get("backtrack_id", None)
         if swing_backtrack_id is None:
