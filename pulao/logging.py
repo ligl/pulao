@@ -86,4 +86,6 @@ def init_logging(log_dir="logs", level=logging.INFO):
 # -------------------------
 # 3️⃣ 获取 logger
 # -------------------------
-logger: BoundLogger = structlog.get_logger()
+def get_logger(name:str = None):
+    return structlog.get_logger(name)
+

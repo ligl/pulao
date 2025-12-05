@@ -11,8 +11,6 @@ from ..constant import \
     EventType, \
     Timeframe, \
     Const
-from ..logging import \
-    logger
 from ..utils import IDGenerator
 from datetime import datetime as Datetime
 

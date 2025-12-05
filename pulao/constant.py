@@ -108,6 +108,7 @@ class EventType(BaseEnum):
     SWING_CHANGED = "swing.changed"
     TREND_CHANGED = "trend.changed"
     MTC_NEW_BAR = "mtc.new_bar"
+    TIMEFRAME_END = "mtc.timeframe.end"
 
 class Timeframe(BaseEnum):
     """

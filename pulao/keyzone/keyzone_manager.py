@@ -2,12 +2,13 @@ from typing import Any
 
 from pulao.constant import EventType, Timeframe
 from pulao.events import Observable
-from pulao.logging import logger
+from pulao.logging import get_logger
 from pulao.mtc.mtc import MultiTimeframeContext
 import polars as pl
 
 from pulao.utils import IDGenerator
 
+logger = get_logger(__name__)
 
 class KeyZoneManager(Observable):
     def __init__(self, mtc: MultiTimeframeContext):
@@ -35,7 +36,7 @@ class KeyZoneManager(Observable):
         }
         self.df_keyzone: pl.DataFrame = pl.DataFrame(schema=schema)
         self.mtc: MultiTimeframeContext = mtc
-        self.mtc.subscribe(self._on_new_bar)
+        self.mtc.subscribe(self._on_new_bar, EventType.MTC_NEW_BAR)
         self.id_gen = IDGenerator(worker_id=5)
 
     def _on_new_bar(self, timeframe:Timeframe, event: EventType, payload: Any):

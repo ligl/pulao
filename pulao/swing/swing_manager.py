@@ -14,9 +14,10 @@ from ..constant import (
     FractalType,
     Const, Timeframe,
 )
-from ..logging import logger
+from ..logging import get_logger
 from ..utils import IDGenerator
 
+logger = get_logger(__name__)
 
 class SwingManager(Observable):
     def __init__(self, cbar_manager: CBarManager):
@@ -35,13 +36,13 @@ class SwingManager(Observable):
         }
         self.df_swing: pl.DataFrame = pl.DataFrame(schema=schema)
         self.cbar_manager: CBarManager = cbar_manager
-        self.cbar_manager.subscribe(self._on_cbar)
+        self.cbar_manager.subscribe(self._on_cbar_changed, EventType.CBAR_CHANGED)
         self.id_gen = IDGenerator(worker_id=4)
         self.backtrack_id = None  # swing变动之后，告诉订阅者，从哪个swing id开始重新计算，大于等于此id的都要被重新计算
         self.symbol = self.cbar_manager.symbol
         self.timeframe = self.cbar_manager.timeframe
 
-    def _on_cbar(self, timeframe:Timeframe, event: EventType, payload: Any):
+    def _on_cbar_changed(self, timeframe:Timeframe, event: EventType, payload: Any):
         self.backtrack_id = None
         cbar_backtrack_id = payload.get("backtrack_id",None)
         # 波段检测识别

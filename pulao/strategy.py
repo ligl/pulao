@@ -5,8 +5,10 @@ from vnpy.trader.object import BarData, TickData
 from vnpy.trader.utility import BarGenerator
 from vnpy_ctastrategy import CtaTemplate
 
+from pulao.bar.sbar import SBar
+from pulao.constant import Timeframe
 from pulao.object import BaseDecorator
-from pulao.bar import SBarManager, SBar
+from pulao.mtc.mtc import MultiTimeframeContext
 
 @BaseDecorator()
 class PulaoStrategy(CtaTemplate):
@@ -20,9 +22,7 @@ class PulaoStrategy(CtaTemplate):
         setting: dict,
     ):
         super().__init__(cta_engine, strategy_name, vt_symbol, setting)
-        self.sbar_manager_entry = None
-        self.sbar_manager_swing = None
-        self.sbar_manager_trend = None
+        self.mtc = MultiTimeframeContext(symbol=self.vt_symbol)
         self.bg_entry = None
         self.bg_trade = None
         self.bg_trend = None
@@ -50,9 +50,10 @@ class PulaoStrategy(CtaTemplate):
             interval=Interval.MINUTE,
         )  # 5分钟合成
 
-        self.sbar_manager_trend = SBarManager()
-        self.sbar_manager_swing = SBarManager()
-        self.sbar_manager_entry = SBarManager()
+        self.mtc.register(Timeframe.M5)
+        self.mtc.register(Timeframe.M15)
+        self.mtc.register(Timeframe.H1)
+
         # # 订阅行情
         # self.cta_engine.subscribe(self.vt_symbol, self.cta_engine.main_engine.get_default_gateway_name())
         print(f"策略 - {self.__class__.__name__} - on_init")
@@ -78,17 +79,17 @@ class PulaoStrategy(CtaTemplate):
     def on_trend_bar(self, bar: BarData):
         # 高周期趋势判断
         print(f"策略 - {self.__class__.__name__} - on_trend_bar: {bar}")
-        self.sbar_manager_trend.append(SBar(bar))
+        self.mtc.append(Timeframe(bar.interval.value),self.parse_sbar(bar))
 
     def on_trade_bar(self, bar: BarData):
         # 中周期信号判断
         print(f"策略 - {self.__class__.__name__} - on_trade_bar: {bar}")
-        self.sbar_manager_swing.append(SBar(bar))
+        self.mtc.append(Timeframe(bar.interval.value),self.parse_sbar(bar))
 
     def on_entry_bar(self, bar: BarData):
         print(f"策略 - {self.__class__.__name__} - on_entry_bar: {bar}")
         # 低周期入场决策
-        self.sbar_manager_entry.append(SBar(bar))
+        self.mtc.append(Timeframe(bar.interval.value),self.parse_sbar(bar))
 
     def execute_decision(self, decision: str, price: float):
         if decision == "open_long":
@@ -105,3 +106,18 @@ class PulaoStrategy(CtaTemplate):
                 self.cover(price, 1)  # 平空
         elif decision == "wait":
             pass  # 等待
+
+    def parse_sbar(self, bar: BarData):
+        return SBar(
+            symbol=bar.symbol,
+            exchange=bar.exchange.value,
+            timeframe=Timeframe(bar.interval.value),
+            datetime=bar.datetime,
+            turnover=bar.turnover,
+            open_price=bar.open_price,
+            close_price=bar.close_price,
+            high_price=bar.high_price,
+            low_price=bar.low_price,
+            volume=bar.volume,
+            open_interest=bar.open_interest,
+        )

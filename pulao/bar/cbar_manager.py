@@ -32,13 +32,13 @@ class CBarManager(Observable):
         }
         self.df_cbar: pl.DataFrame = pl.DataFrame(schema=schema)  # 包含合并后的k线列表
         self.sbar_manager: SBarManager = sbar_manager
-        self.sbar_manager.subscribe(self._on_sbar)
+        self.sbar_manager.subscribe(self._on_new_sbar, EventType.SBAR_CREATED)
         self.id_gen = IDGenerator(worker_id=1)
         self.backtrack_id = None # 合并之后，从哪个k线开始重新计算，大于等于此id的都要被重新计算
         self.symbol = self.sbar_manager.symbol
         self.timeframe = self.sbar_manager.timeframe
 
-    def _on_sbar(self, timeframe: Timeframe, event: EventType, payload: Any):
+    def _on_new_sbar(self, timeframe: Timeframe, event: EventType, payload: Any):
         # 1. K线包含处理
         self._agg_bar(payload.get("sbar"))
         # 2. 分形检测
