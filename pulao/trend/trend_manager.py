@@ -785,6 +785,21 @@ class TrendManager(Observable):
             trend.swing_start_id, trend.swing_end_id
         )
 
+    def get_last_trend(self, count:int = None, include_active:bool = True)-> None | Trend | List[Trend]:
+        if count is None:
+            count = 1
+
+        if include_active:
+            df = self.df_trend.tail(count)
+        else:
+            df = self.df_trend.tail(Const.LOOKBACK_LIMIT).filter(pl.col("is_completed")==True).tail(count)
+
+        if df.is_empty():
+            return None
+        if count == 1:
+            return Trend(**df.row(0, named=True))
+        return [Trend(**row) for row in df.rows(named=True)]
+
     def write_parquet(self):
         # TODO 实时行情不能这么做，需要考虑性能影响
         self.df_trend.write_parquet(

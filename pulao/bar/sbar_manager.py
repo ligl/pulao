@@ -7,10 +7,7 @@ from pulao.indicator import IndicatorManager, EmaIndicator
 from .sbar import SBar
 import polars as pl
 
-from ..constant import \
-    EventType, \
-    Timeframe, \
-    Const
+from ..constant import EventType, Timeframe, Const
 from ..utils import IDGenerator
 from datetime import datetime as Datetime
 
@@ -20,7 +17,7 @@ class SBarManager(Observable):
     管理缓存bar数据，计算指标
     """
 
-    def __init__(self, symbol:str, timeframe: Timeframe):
+    def __init__(self, symbol: str, timeframe: Timeframe):
         super().__init__()
         schema = {
             "id": pl.UInt64,
@@ -41,11 +38,11 @@ class SBarManager(Observable):
         self.df_sbar: pl.DataFrame = pl.DataFrame(schema=schema)
 
         self.symbol = symbol
-        self.timeframe:Timeframe = timeframe
+        self.timeframe: Timeframe = timeframe
         self.indicator_manager: IndicatorManager = IndicatorManager()
         self.indicator_manager.register(EmaIndicator(20))
         self.indicator_manager.register(EmaIndicator(60))
-        self.id_gen:IDGenerator = IDGenerator(worker_id=0)
+        self.id_gen: IDGenerator = IDGenerator(worker_id=0)
 
     def append(self, sbar: SBar) -> int:
         # 为sbar设置index，唯一的
@@ -79,7 +76,7 @@ class SBarManager(Observable):
             )
         )  # append row
         self.write_parquet()
-        self.notify(self.timeframe,EventType.SBAR_CREATED, sbar = sbar)
+        self.notify(self.timeframe, EventType.SBAR_CREATED, sbar=sbar)
         return sbar.id
 
     def get_index(self, id: int) -> int | None:
@@ -105,7 +102,7 @@ class SBarManager(Observable):
             return None
         return [SBar(**row) for row in df.rows(named=True)]
 
-    def get_limit_sbar(self, start_id:int ,end_id:int, arg=str)->SBar | None:
+    def get_limit_sbar(self, start_id: int, end_id: int, arg=str) -> SBar | None:
         """
         获取一段区间[start_id, end_id]中的最高价或最低价，即max(high_price)或min(low_price)
         :param start_id:
@@ -119,8 +116,8 @@ class SBarManager(Observable):
         end_index = self.get_index(end_id)
         if start_index is None or end_index is None:
             return None
-        if start_index > end_index: # 交换
-            start_index,end_index = end_index,start_index
+        if start_index > end_index:  # 交换
+            start_index, end_index = end_index, start_index
 
         df = self.df_sbar.slice(start_index, end_index - start_index + 1)
         if df.is_empty():
@@ -131,7 +128,7 @@ class SBarManager(Observable):
             index = df["low_price"].arg_min()
         return SBar(**df.row(index, named=True))
 
-    def get_limit_sbar_id(self, start_id:int ,end_id:int, arg=str)->int | None:
+    def get_limit_sbar_id(self, start_id: int, end_id: int, arg=str) -> int | None:
         sbar = self.get_limit_sbar(start_id, end_id, arg)
         if sbar is None:
             return None
@@ -141,15 +138,37 @@ class SBarManager(Observable):
     def total_count(self):
         return self.df_sbar.height
 
-    def get_last(self, length: int = 1):
+    def get_last_sbar(self, length: int = 1):
         return self.df_sbar.slice(-length)
+
+    def get_around_sbar(
+        self, pivot_id: int, length: int, ret_df: bool = False
+    ) -> List[SBar] | None | pl.DataFrame:
+        """
+        获取在pivot_id周围的sbar list
+        :param pivot_id: 中轴点
+        :param length: 左右各多少根
+        :param ret_df: 是否返回原生pl.DataFrame
+        :return:
+        """
+        idx = self.get_index(pivot_id)
+        start_index = idx - length
+        end_index = idx + length
+
+        df = self.df_sbar.slice(start_index, end_index - start_index + 1)
+        if ret_df:
+            return df
+
+        if df.is_empty():
+            return None
+        return [SBar(**row) for row in df.rows(named=True)]
 
     def update_by_id(self, id: int, field: str, value):
         index = self.get_index(id)
         if index is None:
             return
 
-        self.df_sbar[index,field] = value
+        self.df_sbar[index, field] = value
 
     def update(self, with_columns):
         self.df_sbar = self.df_sbar.with_columns(with_columns)
@@ -160,14 +179,19 @@ class SBarManager(Observable):
     def write_parquet(self):
         # TODO 实时行情不能这么做，需要考虑性能影响
         self.df_sbar.write_parquet(
-            Const.PARQUET_PATH.format(symbol=self.symbol, filename=f"sbar_{self.timeframe}"),
+            Const.PARQUET_PATH.format(
+                symbol=self.symbol, filename=f"sbar_{self.timeframe}"
+            ),
             compression="zstd",
             compression_level=3,
             statistics=False,
-            mkdir=True
+            mkdir=True,
         )
 
     def read_parquet(self):
-        self.df_sbar = pl.read_parquet(Const.PARQUET_PATH.format(symbol=self.symbol, filename=f"sbar_{self.timeframe}"))
+        self.df_sbar = pl.read_parquet(
+            Const.PARQUET_PATH.format(
+                symbol=self.symbol, filename=f"sbar_{self.timeframe}"
+            )
+        )
         return self.df_sbar
-

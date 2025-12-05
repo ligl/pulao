@@ -42,7 +42,6 @@ class KeyZone:
     # 构成 KeyZone 的关键 index（分形点、突破点等）
     # key_indices: List[int] = field(default_factory=list)
 
-    is_completed:bool = False
     created_at: Datetime = None  # 创建时间
 
     def __post_init__(self):

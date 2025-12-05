@@ -83,16 +83,9 @@ class KeyZoneOrigin(BaseEnum):
     """
     KeyZone 产生的结构来源
     """
-    MAJOR_SWING = "major_swing"  # 主波段
-    SECONDARY_SWING = "secondary_swing"  # 次级波段
-    TREND_HH = "trend_hh"  # 结构高点 HH
-    TREND_HL = "trend_hl"  # 结构低点 HL
-    TREND_LL = "trend_ll"  # 结构低点 LL
-    TREND_LH = "trend_lh"  # 结构高点 LH
+    SWING = "swing"  # 波段
+    TREND = "trend"  # 趋势
     EMA = "ema"  # EMA 动态关键位
-    ATR = "atr"  # 波动率（ATR 区）
-    VOLUME_NODE = "volume_node"  # 成交量节点（POC / value area）
-    CANDLE_ACTION = "candle_action"  # K线行为区（长影线、多次测试）
 
 class KeyZoneOrientation(BaseEnum):
     HORIZONTAL = 1
