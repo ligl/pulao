@@ -7,7 +7,12 @@ from pulao.indicator import IndicatorManager, EmaIndicator
 from .sbar import SBar
 import polars as pl
 
-from ..constant import EventType
+from ..constant import \
+    EventType, \
+    Timeframe, \
+    Const
+from ..logging import \
+    logger
 from ..utils import IDGenerator
 from datetime import datetime as Datetime
 
@@ -17,7 +22,7 @@ class SBarManager(Observable):
     管理缓存bar数据，计算指标
     """
 
-    def __init__(self):
+    def __init__(self, symbol:str, timeframe: Timeframe):
         super().__init__()
         schema = {
             "id": pl.UInt64,
@@ -37,10 +42,12 @@ class SBarManager(Observable):
         }
         self.df_sbar: pl.DataFrame = pl.DataFrame(schema=schema)
 
+        self.symbol = symbol
+        self.timeframe:Timeframe = timeframe
         self.indicator_manager: IndicatorManager = IndicatorManager()
         self.indicator_manager.register(EmaIndicator(20))
         self.indicator_manager.register(EmaIndicator(60))
-        self.id_gen = IDGenerator(worker_id=0)
+        self.id_gen:IDGenerator = IDGenerator(worker_id=0)
 
     def append(self, sbar: SBar) -> int:
         # 为sbar设置index，唯一的
@@ -73,7 +80,8 @@ class SBarManager(Observable):
                 orient="row",
             )
         )  # append row
-        self.notify(sbar.timeframe,EventType.SBAR_CREATED, sbar = sbar)
+        self.write_parquet()
+        self.notify(self.timeframe,EventType.SBAR_CREATED, sbar = sbar)
         return sbar.id
 
     def get_index(self, id: int) -> int | None:
@@ -150,3 +158,18 @@ class SBarManager(Observable):
 
     def get_dataframe(self):
         return self.df_sbar
+
+    def write_parquet(self):
+        # TODO 实时行情不能这么做，需要考虑性能影响
+        self.df_sbar.write_parquet(
+            Const.PARQUET_PATH.format(symbol=self.symbol, filename=f"sbar_{self.timeframe}"),
+            compression="zstd",
+            compression_level=3,
+            statistics=False,
+            mkdir=True
+        )
+
+    def read_parquet(self):
+        self.df_sbar = pl.read_parquet(Const.PARQUET_PATH.format(symbol=self.symbol, filename=f"sbar_{self.timeframe}"))
+        return self.df_sbar
+

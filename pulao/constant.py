@@ -12,6 +12,7 @@ class Const(metaclass=ReadOnlyMeta):
     LOOKBACK_LIMIT: int = (
         300  # 检查前一个波段/趋势时，向前回溯的K线数量，越过这个数量就不再关注
     )
+    PARQUET_PATH:str = "../dataset/{symbol}/{filename}.parquet"
 
 
 class BaseEnum(Enum):
@@ -106,6 +107,7 @@ class EventType(BaseEnum):
     CBAR_CHANGED = "cbar.changed"
     SWING_CHANGED = "swing.changed"
     TREND_CHANGED = "trend.changed"
+    MTC_NEW_BAR = "mtc.new_bar"
 
 class Timeframe(BaseEnum):
     """

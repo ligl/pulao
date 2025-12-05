@@ -38,6 +38,8 @@ class SwingManager(Observable):
         self.cbar_manager.subscribe(self._on_cbar)
         self.id_gen = IDGenerator(worker_id=4)
         self.backtrack_id = None  # swing变动之后，告诉订阅者，从哪个swing id开始重新计算，大于等于此id的都要被重新计算
+        self.symbol = self.cbar_manager.symbol
+        self.timeframe = self.cbar_manager.timeframe
 
     def _on_cbar(self, timeframe:Timeframe, event: EventType, payload: Any):
         self.backtrack_id = None
@@ -421,14 +423,15 @@ class SwingManager(Observable):
     def write_parquet(self):
         # TODO 实时行情不能这么做，需要考虑性能影响
         self.df_swing.write_parquet(
-            "./swing_data.parquet",
+            Const.PARQUET_PATH.format(symbol=self.symbol, filename=f"swing_{self.timeframe}"),
             compression="zstd",
             compression_level=3,
-            statistics=False
+            statistics=False,
+            mkdir=True
         )
 
     def read_parquet(self):
-        self.df_swing = pl.read_parquet("./swing_data.parquet")
+        self.df_swing = pl.read_parquet(Const.PARQUET_PATH.format(symbol=self.symbol, filename=f"swing_{self.timeframe}"))
         return self.df_swing
 
     def get_fractal(self, cbar_id: int) -> Fractal:

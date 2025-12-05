@@ -189,6 +189,8 @@ class TrendManager(Observable):
         self.active_trend_sfs = _TrendSFSeq(self)  # 趋势和趋势的特征序列
         self.pullback_trend_sfs = _TrendSFSeq(self)  # 反向趋势和特征序列
         self.backtrack_id = None
+        self.symbol = self.swing_manager.symbol
+        self.timeframe = self.swing_manager.timeframe
 
     def _on_swing(self, timeframe:Timeframe, event: EventType, payload: Any):
         # 1. 趋势检测识别
@@ -785,14 +787,15 @@ class TrendManager(Observable):
     def write_parquet(self):
         # TODO 实时行情不能这么做，需要考虑性能影响
         self.df_trend.write_parquet(
-            "./trend_data.parquet",
+            Const.PARQUET_PATH.format(symbol=self.symbol, filename=f"trend_{self.timeframe}"),
             compression="zstd",
             compression_level=3,
             statistics=False,
+            mkdir=True
         )
 
     def read_parquet(self):
-        self.df_trend = pl.read_parquet("./trend_data.parquet")
+        self.df_trend = pl.read_parquet(Const.PARQUET_PATH.format(symbol=self.symbol, filename=f"trend_{self.timeframe}"))
         return self.df_trend
 
     def pretty_worker_id(self):

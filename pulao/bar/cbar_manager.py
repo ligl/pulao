@@ -35,6 +35,8 @@ class CBarManager(Observable):
         self.sbar_manager.subscribe(self._on_sbar)
         self.id_gen = IDGenerator(worker_id=1)
         self.backtrack_id = None # 合并之后，从哪个k线开始重新计算，大于等于此id的都要被重新计算
+        self.symbol = self.sbar_manager.symbol
+        self.timeframe = self.sbar_manager.timeframe
 
     def _on_sbar(self, timeframe: Timeframe, event: EventType, payload: Any):
         # 1. K线包含处理
@@ -49,14 +51,15 @@ class CBarManager(Observable):
     def write_parquet(self):
         # TODO 实时行情不能这么做，需要考虑性能影响
         self.df_cbar.write_parquet(
-            "./cbar_data.parquet",
+            Const.PARQUET_PATH.format(symbol=self.symbol, filename=f"cbar_{self.timeframe}"),
             compression="zstd",
             compression_level=3,
-            statistics=False
+            statistics=False,
+            mkdir=True
         )
 
     def read_parquet(self):
-        self.df_cbar = pl.read_parquet("./cbar_data.parquet")
+        self.df_cbar = pl.read_parquet(Const.PARQUET_PATH.format(symbol=self.symbol, filename=f"cbar_{self.timeframe}"))
         return self.df_cbar
 
     def _agg_bar(self, sbar: SBar):
