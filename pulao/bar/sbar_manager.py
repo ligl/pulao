@@ -196,7 +196,7 @@ class SBarManager(Observable):
         )
         return self.df_sbar
 
-    def span(self, start_id:int, end_id:int) -> int|None:
+    def stat(self, start_id:int, end_id:int) -> dict|None:
         start_idx = self.get_index(start_id)
         end_idx = self.get_index(end_id)
         if start_idx is None or end_idx is None:
@@ -206,6 +206,9 @@ class SBarManager(Observable):
 
         df = self.df_sbar.slice(start_idx, end_idx - start_idx + 1)
         if df.is_empty():
-            return 0
+            return None
 
-        return df.height
+        start_oi = df.select(pl.col("open_interest").first()).item()
+        end_oi = df.select(pl.col("open_interest").last()).item()
+        volume = df.select(pl.col("volume").sum()).item()
+        return dict(span=df.height, volume=volume, start_oi=start_oi, end_oi=end_oi)

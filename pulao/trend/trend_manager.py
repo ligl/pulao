@@ -183,6 +183,9 @@ class TrendManager(Observable):
             "low_price": pl.Float32,
             "direction": pl.Int8,
             "span": pl.UInt32,
+            "volume": pl.Float32,
+            "start_oi": pl.Float32,
+            "end_oi": pl.Float32,
             "is_completed": pl.Boolean,  # 还未被确认的趋势，即正在进行中的趋势，在实时行情中尚未被确认
             "created_at": pl.Datetime("ms"),
         }
@@ -595,10 +598,14 @@ class TrendManager(Observable):
 
     def _append_trend(self, trend: Trend) -> Trend:
         # 添加强度属性
-        span = self.swing_manager.cbar_manager.sbar_manager.span(
+        stat_rlt = self.swing_manager.cbar_manager.sbar_manager.stat(
             trend.sbar_start_id, trend.sbar_end_id
         )
-        trend.span = span if span else 0
+        if stat_rlt:
+            trend.span = stat_rlt.get("span", 0)
+            trend.volume = stat_rlt.get("volume", 0)
+            trend.start_oi = stat_rlt.get("start_oi", 0)
+            trend.end_oi = stat_rlt.get("end_oi", 0)
         new_trend = {
             "id": self.id_gen.get_id(),
             "direction": trend.direction.value,
@@ -609,6 +616,9 @@ class TrendManager(Observable):
             "high_price": trend.high_price,
             "low_price": trend.low_price,
             "span": trend.span,
+            "volume": trend.volume,
+            "start_oi": trend.start_oi,
+            "end_oi": trend.end_oi,
             "is_completed": trend.is_completed,
             "created_at": Datetime.now(),
         }

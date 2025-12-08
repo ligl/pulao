@@ -32,6 +32,9 @@ class SwingManager(Observable):
             "low_price": pl.Float32,
             "direction": pl.Int8,
             "span": pl.UInt32,
+            "volume": pl.Float32,
+            "start_oi": pl.Float32,
+            "end_oi": pl.Float32,
             "is_completed": pl.Boolean,  # 还未被确认的波段，即正在进行中的波段，在实时行情中尚未被确认
             "created_at": pl.Datetime("ms"),
         }
@@ -298,10 +301,14 @@ class SwingManager(Observable):
 
     def _append_swing(self, swing: Swing):
         # 添加强度属性
-        span = self.cbar_manager.sbar_manager.span(
+        stat_rlt = self.cbar_manager.sbar_manager.stat(
             swing.sbar_start_id,
             swing.sbar_end_id)
-        swing.span = span if span else 0
+        if stat_rlt:
+            swing.span = stat_rlt.get("span", 0)
+            swing.volume = stat_rlt.get("volume", 0)
+            swing.start_oi = stat_rlt.get("start_oi", 0)
+            swing.end_oi = stat_rlt.get("end_oi", 0)
 
         new_swing = {
             "id": self.id_gen.get_id(),
@@ -313,6 +320,9 @@ class SwingManager(Observable):
             "high_price": swing.high_price,
             "low_price": swing.low_price,
             "span": swing.span,
+            "volume": swing.volume,
+            "start_oi": swing.start_oi,
+            "end_oi": swing.end_oi,
             "is_completed": swing.is_completed,
             "created_at": Datetime.now(),
         }

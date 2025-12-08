@@ -21,6 +21,9 @@ class Swing:
     low_price: float = 0
 
     span: float = 0 # 横跨多少根sbar
+    volume: float = 0
+    start_oi: float = None
+    end_oi: float = None
 
     is_completed: bool = False  # 波段是否完成
     created_at: Datetime = None  # 创建时间
