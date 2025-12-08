@@ -31,6 +31,7 @@ class SwingManager(Observable):
             "high_price": pl.Float32,
             "low_price": pl.Float32,
             "direction": pl.Int8,
+            "span": pl.UInt32,
             "is_completed": pl.Boolean,  # 还未被确认的波段，即正在进行中的波段，在实时行情中尚未被确认
             "created_at": pl.Datetime("ms"),
         }
@@ -296,6 +297,12 @@ class SwingManager(Observable):
             )  # 删除未完成的波段
 
     def _append_swing(self, swing: Swing):
+        # 添加强度属性
+        span = self.cbar_manager.sbar_manager.span(
+            swing.sbar_start_id,
+            swing.sbar_end_id)
+        swing.span = span if span else 0
+
         new_swing = {
             "id": self.id_gen.get_id(),
             "direction": swing.direction.value,
@@ -305,9 +312,11 @@ class SwingManager(Observable):
             "sbar_end_id": swing.sbar_end_id,
             "high_price": swing.high_price,
             "low_price": swing.low_price,
+            "span": swing.span,
             "is_completed": swing.is_completed,
             "created_at": Datetime.now(),
         }
+
         if swing.is_completed:
             start_fractal = self.cbar_manager.get_fractal(swing.cbar_start_id)
             end_fractal = self.cbar_manager.get_fractal(swing.cbar_end_id)

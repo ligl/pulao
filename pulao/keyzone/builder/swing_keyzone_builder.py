@@ -1,7 +1,6 @@
 from typing import List
 
 from pulao.constant import KeyZoneOrigin, KeyZoneOrientation, Direction
-from pulao.swing.swing import Swing
 from .base_builder import KeyZoneBuilder
 from ..keyzone import KeyZone
 

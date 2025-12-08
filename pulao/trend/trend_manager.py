@@ -12,7 +12,8 @@ from ..constant import (
     EventType,
     Direction,
     FractalType,
-    Const, Timeframe,
+    Const,
+    Timeframe,
 )
 from ..logging import get_logger
 from ..swing.swing import Swing
@@ -20,6 +21,7 @@ from ..swing.swing_manager import SwingManager
 from ..utils import IDGenerator
 
 logger = get_logger(__name__)
+
 
 class _TrendSFSeq:
     def __init__(
@@ -180,6 +182,7 @@ class TrendManager(Observable):
             "high_price": pl.Float32,
             "low_price": pl.Float32,
             "direction": pl.Int8,
+            "span": pl.UInt32,
             "is_completed": pl.Boolean,  # 还未被确认的趋势，即正在进行中的趋势，在实时行情中尚未被确认
             "created_at": pl.Datetime("ms"),
         }
@@ -193,7 +196,7 @@ class TrendManager(Observable):
         self.symbol = self.swing_manager.symbol
         self.timeframe = self.swing_manager.timeframe
 
-    def _on_swing_changed(self, timeframe:Timeframe, event: EventType, payload: Any):
+    def _on_swing_changed(self, timeframe: Timeframe, event: EventType, payload: Any):
         # 1. 趋势检测识别
         swing_backtrack_id = payload.get("backtrack_id", None)
         if swing_backtrack_id is None:
@@ -203,7 +206,7 @@ class TrendManager(Observable):
             self._backtrack_replay(swing_backtrack_id)
         # 2. 保存结果
         self.write_parquet()
-        self.notify(timeframe,EventType.TREND_CHANGED, backtrack_id=self.backtrack_id)
+        self.notify(timeframe, EventType.TREND_CHANGED, backtrack_id=self.backtrack_id)
 
     def _clean_backtrack(self, swing_backtrack_id: int):
         # 1. 清理df_trend
@@ -379,7 +382,11 @@ class TrendManager(Observable):
             if not new_trend_start_swing:
                 self.pullback_trend_sfs.clear()
                 self.active_trend_sfs.clear()
-                logger.debug("next_swing is None,不应该出现的情况，只有完成波段被重新破坏且是最后一根，正好还是趋势开始的时候出现", start_swing=new_trend_start_swing, new_trend_direction= self.active_trend_sfs.trend)
+                logger.debug(
+                    "next_swing is None,不应该出现的情况，只有完成波段被重新破坏且是最后一根，正好还是趋势开始的时候出现",
+                    start_swing=new_trend_start_swing,
+                    new_trend_direction=self.active_trend_sfs.trend,
+                )
                 return
 
             new_trend = Trend(
@@ -541,7 +548,11 @@ class TrendManager(Observable):
             # 2). 调整前一趋势的终点
             # 前一趋势即active trend之前完成的最后一个趋势
             prev_trend = self.get_trend(is_completed=True)
-            logger.debug("需要调整当前趋势的起点，以及前一趋势的终点", active_trend=trend, prev_trend=prev_trend)
+            logger.debug(
+                "需要调整当前趋势的起点，以及前一趋势的终点",
+                active_trend=trend,
+                prev_trend=prev_trend,
+            )
             if prev_trend:
                 prev_end_swing = self.swing_manager.prev_swing(
                     trend.swing_start_id
@@ -583,6 +594,11 @@ class TrendManager(Observable):
             )  # 删除未完成的趋势
 
     def _append_trend(self, trend: Trend) -> Trend:
+        # 添加强度属性
+        span = self.swing_manager.cbar_manager.sbar_manager.span(
+            trend.sbar_start_id, trend.sbar_end_id
+        )
+        trend.span = span if span else 0
         new_trend = {
             "id": self.id_gen.get_id(),
             "direction": trend.direction.value,
@@ -592,6 +608,7 @@ class TrendManager(Observable):
             "sbar_end_id": trend.sbar_end_id,
             "high_price": trend.high_price,
             "low_price": trend.low_price,
+            "span": trend.span,
             "is_completed": trend.is_completed,
             "created_at": Datetime.now(),
         }
@@ -785,14 +802,20 @@ class TrendManager(Observable):
             trend.swing_start_id, trend.swing_end_id
         )
 
-    def get_last_trend(self, count:int = None, include_active:bool = True)-> None | Trend | List[Trend]:
+    def get_last_trend(
+        self, count: int = None, include_active: bool = True
+    ) -> None | Trend | List[Trend]:
         if count is None:
             count = 1
 
         if include_active:
             df = self.df_trend.tail(count)
         else:
-            df = self.df_trend.tail(Const.LOOKBACK_LIMIT).filter(pl.col("is_completed")==True).tail(count)
+            df = (
+                self.df_trend.tail(Const.LOOKBACK_LIMIT)
+                .filter(pl.col("is_completed") == True)
+                .tail(count)
+            )
 
         if df.is_empty():
             return None
@@ -803,24 +826,38 @@ class TrendManager(Observable):
     def write_parquet(self):
         # TODO 实时行情不能这么做，需要考虑性能影响
         self.df_trend.write_parquet(
-            Const.PARQUET_PATH.format(symbol=self.symbol, filename=f"trend_{self.timeframe}"),
+            Const.PARQUET_PATH.format(
+                symbol=self.symbol, filename=f"trend_{self.timeframe}"
+            ),
             compression="zstd",
             compression_level=3,
             statistics=False,
-            mkdir=True
+            mkdir=True,
         )
 
     def read_parquet(self):
-        self.df_trend = pl.read_parquet(Const.PARQUET_PATH.format(symbol=self.symbol, filename=f"trend_{self.timeframe}"))
+        self.df_trend = pl.read_parquet(
+            Const.PARQUET_PATH.format(
+                symbol=self.symbol, filename=f"trend_{self.timeframe}"
+            )
+        )
         return self.df_trend
 
     def pretty_worker_id(self):
         return self.df_trend.with_columns(
             [
-                ((pl.col("id") // (2 ** 12)) % (2 ** 10)).alias("worker_id_trend"),
-                ((pl.col("swing_start_id") // (2**12)) % (2**10)).alias("worker_id_swing_start"),
-                ((pl.col("swing_end_id") // (2**12)) % (2**10)).alias("worker_id_swing_end"),
-                ((pl.col("sbar_start_id") // (2 ** 12)) % (2 ** 10)).alias("worker_id_sbar_start"),
-                ((pl.col("sbar_end_id") // (2 ** 12)) % (2 ** 10)).alias("worker_id_sbar_end"),
+                ((pl.col("id") // (2**12)) % (2**10)).alias("worker_id_trend"),
+                ((pl.col("swing_start_id") // (2**12)) % (2**10)).alias(
+                    "worker_id_swing_start"
+                ),
+                ((pl.col("swing_end_id") // (2**12)) % (2**10)).alias(
+                    "worker_id_swing_end"
+                ),
+                ((pl.col("sbar_start_id") // (2**12)) % (2**10)).alias(
+                    "worker_id_sbar_start"
+                ),
+                ((pl.col("sbar_end_id") // (2**12)) % (2**10)).alias(
+                    "worker_id_sbar_end"
+                ),
             ]
         )

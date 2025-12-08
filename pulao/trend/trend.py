@@ -1,22 +1,27 @@
+import math
 from dataclasses import dataclass
 
 from pulao.constant import Direction
 from datetime import datetime as Datetime
+
 
 @dataclass
 class Trend:
     """
     一个方向上力量占优的波段序列，每个趋势至少包含3个有重叠的波段（允许更长波段序列）
     """
+
     id: int = None
     direction: Direction = None  # up / down / range
-    swing_start_id: int = None # swing_df
+    swing_start_id: int = None  # swing_df
     swing_end_id: int = None
     high_price: float = 0
     low_price: float = 0
 
-    sbar_start_id: int = None # sbar_df id
+    sbar_start_id: int = None  # sbar_df id
     sbar_end_id: int = None
+
+    span: float = 0  # 横跨多少根sbar
 
     is_completed: bool = False  # 趋势是否完成
     created_at: Datetime = None  # 创建时间
@@ -29,6 +34,16 @@ class Trend:
     def distance(self):
         return self.high_price - self.low_price
 
+    @property
+    def slope(self):
+        if self.span == 0:
+            return 0
+        return self.distance / self.span
+
+    @property
+    def angle(self):
+        return math.degrees(math.atan(self.slope))
+
     def contains(self, price: float) -> bool:
         return self.low_price <= price <= self.high_price
 
@@ -39,4 +54,3 @@ class Trend:
         elif self.direction == Direction.DOWN:
             return (self.high_price - price) / span
         return (price - self.low_price) / span
-

@@ -195,3 +195,17 @@ class SBarManager(Observable):
             )
         )
         return self.df_sbar
+
+    def span(self, start_id:int, end_id:int) -> int|None:
+        start_idx = self.get_index(start_id)
+        end_idx = self.get_index(end_id)
+        if start_idx is None or end_idx is None:
+            return None
+        if start_idx > end_idx:
+            start_idx, end_idx = end_idx, start_idx
+
+        df = self.df_sbar.slice(start_idx, end_idx - start_idx + 1)
+        if df.is_empty():
+            return 0
+
+        return df.height

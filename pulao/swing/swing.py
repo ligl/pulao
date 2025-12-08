@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+import math
 from dataclasses import dataclass
 
 from pulao.constant import Direction
@@ -18,6 +20,8 @@ class Swing:
     high_price: float = 0
     low_price: float = 0
 
+    span: float = 0 # 横跨多少根sbar
+
     is_completed: bool = False  # 波段是否完成
     created_at: Datetime = None  # 创建时间
 
@@ -28,6 +32,16 @@ class Swing:
     @property
     def distance(self):
         return self.high_price - self.low_price
+
+    @property
+    def slope(self):
+        if self.span == 0:
+            return 0
+        return self.distance / self.span
+
+    @property
+    def angle(self):
+        return math.degrees(math.atan(self.slope))
 
     def contains(self, price: float) -> bool:
         return self.low_price <= price <= self.high_price
@@ -51,4 +65,3 @@ class Swing:
 
         # 最大低点 <= 最小高点 表示有重叠
         return max(low_all) <= min(high_all)
-
