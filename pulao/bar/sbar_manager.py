@@ -81,7 +81,7 @@ class SBarManager(Observable):
 
     def get_index(self, id: int) -> int | None:
         idx = self.df_sbar.select(pl.col("id").search_sorted(id)).item()
-        if idx is None or self.df_sbar["id"][idx] != id:
+        if idx < 0 or idx >= self.df_sbar.height or self.df_sbar["id"][idx] != id:
             return None
         else:
             return idx
@@ -152,8 +152,14 @@ class SBarManager(Observable):
         :return:
         """
         idx = self.get_index(pivot_id)
+
         start_index = idx - length
         end_index = idx + length
+
+        if start_index < 0:
+            start_index = 0
+        if end_index >= self.df_sbar.height:
+            end_index = self.df_sbar.height - 1
 
         df = self.df_sbar.slice(start_index, end_index - start_index + 1)
         if ret_df:
