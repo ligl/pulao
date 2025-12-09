@@ -2,7 +2,9 @@ from dataclasses import dataclass
 
 from datetime import datetime as Datetime
 
-from pulao.constant import Timeframe
+from pulao.constant import \
+    Timeframe, \
+    Exchange
 
 
 @dataclass
@@ -14,7 +16,7 @@ class SBar:
     id: int = None # 在SBarManager数据源中的索引，类似数据库中的自增id
 
     symbol: str = None
-    exchange: str = None
+    exchange: Exchange = None
     timeframe: Timeframe = None
 
     datetime: Datetime = None
@@ -34,6 +36,8 @@ class SBar:
     def __post_init__(self):
         if isinstance(self.timeframe, str):
             self.timeframe = Timeframe(self.timeframe)
+        if isinstance(self.exchange, str):
+            self.exchange = Exchange(self.exchange)
 
     @property
     def body(self) -> float:

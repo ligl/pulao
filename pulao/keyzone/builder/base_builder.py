@@ -6,8 +6,10 @@ from pulao.keyzone.keyzone import KeyZone
 from pulao.mtc.mtc import MultiTimeframeContext
 import polars as pl
 
+from pulao.symbol.registry import SymbolRegistry
 
-def compute_multi_touch(df_sub:pl.DataFrame, tick: float, direction: Direction)->(float, float, list):
+
+def compute_multi_touch(df_sub:pl.DataFrame, tick_size: float, direction: Direction)->(float, float, list):
     """
     多触碰 KeyZone
     direction = "low"
@@ -52,7 +54,7 @@ def compute_multi_touch(df_sub:pl.DataFrame, tick: float, direction: Direction)-
     p = start_price
     while p <= end_price:
         price_grid.append(p)
-        p += tick
+        p += tick_size
 
     # -------- 统计触碰次数 --------
     counts = []
@@ -89,9 +91,10 @@ class KeyZoneBuilder(ABC):
     def __init__(self, mtc: MultiTimeframeContext, timeframe: Timeframe):
         self.mtc = mtc
         self.timeframe = timeframe
+        self.symbol = mtc.symbol
 
     @abstractmethod
-    def build(self) -> KeyZone | List[KeyZone] | None:
+    def build(self) ->List[KeyZone] | None:
         """
         不同 origin_type 必须实现自己的构建方法
         """
@@ -101,4 +104,5 @@ class KeyZoneBuilder(ABC):
         self, pivot_id: int, length: int, direction: Direction
     ) -> (float, float,list):
         sbar_df = self.mtc.get_around_sbar(pivot_id, length, self.timeframe, ret_df=True)
-        return compute_multi_touch(sbar_df,1,direction)
+        symbol = SymbolRegistry.get(self.symbol)
+        return compute_multi_touch(sbar_df,symbol.tick_size,direction)

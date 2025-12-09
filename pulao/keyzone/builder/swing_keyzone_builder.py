@@ -8,7 +8,7 @@ from ..keyzone import KeyZone
 class SwingKeyZoneBuilder(KeyZoneBuilder):
     origin_type = KeyZoneOrigin.SWING
 
-    def build(self) -> KeyZone | List[KeyZone] | None:
+    def build(self) -> List[KeyZone] | None:
         swings = self.mtc.get_swing_window(5, self.timeframe)
 
         keyzone_list = []

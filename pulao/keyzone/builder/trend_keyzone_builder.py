@@ -8,7 +8,7 @@ from pulao.keyzone.keyzone import KeyZone
 class TrendKeyZoneBuilder(KeyZoneBuilder):
     origin_type = KeyZoneOrigin.TREND
 
-    def build(self) -> KeyZone | List[KeyZone] | None:
+    def build(self) -> List[KeyZone] | None:
         trends = self.mtc.get_trend_window(5, self.timeframe)
 
         keyzone_list = []

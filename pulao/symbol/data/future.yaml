@@ -1,0 +1,23 @@
+rb2505:
+  asset_type: future
+  product: rb
+  exchange: SHFE
+  multiplier: 10
+  tick_size: 1
+  margin_rate: 0.12
+  delivery_month: "2505"
+  trading_unit: "10吨/手"
+  limit_rate: 0.06
+
+  fee:
+    per_lot: 2.0
+
+  sessions:
+    sections:
+      - ["09:00", "10:15"]
+      - ["10:30", "11:30"]
+      - ["13:30", "15:00"]
+      - ["21:00", "23:00"]
+
+  category: 黑色
+  price_precision: 0

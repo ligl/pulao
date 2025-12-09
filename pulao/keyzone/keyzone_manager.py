@@ -1,12 +1,6 @@
-from typing import \
-    Any, \
-    List
+from typing import Any, List
 
-from pulao.constant import \
-    EventType, \
-    Timeframe, \
-    KeyZoneOrigin, \
-    Const
+from pulao.constant import EventType, Timeframe, KeyZoneOrigin, Const
 from pulao.events import Observable
 from pulao.keyzone.builder import SwingKeyZoneBuilder, TrendKeyZoneBuilder
 from pulao.keyzone.builder_factory import KeyZoneFactory
@@ -55,31 +49,30 @@ class KeyZoneManager(Observable):
         # cbar_list = self.mtc.get_cbar_window(200, timeframe)
 
         swing_keyzone_list = KeyZoneFactory.create(
-            self.mtc,
-            KeyZoneOrigin.SWING,
-            timeframe
+            self.mtc, KeyZoneOrigin.SWING, timeframe
         ).build()
 
         trend_keyzone_list = KeyZoneFactory.create(
             self.mtc, KeyZoneOrigin.TREND, timeframe
         ).build()
 
-
         # 添加或更新KeyZone
         self._clear_keyzone(timeframe)
         self._append_keyzone(swing_keyzone_list + trend_keyzone_list)
-        logger.debug("_on_new_bar in mtc", swing_keyzone_list=swing_keyzone_list, trend_keyzone_list=trend_keyzone_list)
+        logger.debug(
+            "_on_new_bar in mtc",
+            swing_keyzone_list=swing_keyzone_list,
+            trend_keyzone_list=trend_keyzone_list,
+        )
         self.write_parquet()
 
     def _clear_keyzone(self, timeframe: Timeframe):
-        self.df_keyzone = self.df_keyzone.filter(~(pl.col("timeframe")==timeframe))
+        self.df_keyzone = self.df_keyzone.filter(~(pl.col("timeframe") == timeframe))
 
     def _append_keyzone(self, keyzone_list: List[KeyZone]):
-
-        rows =[]
+        rows = []
         for keyzone in keyzone_list:
-            keyzone_dict = vars(
-                keyzone)
+            keyzone_dict = vars(keyzone)
             keyzone_dict["id"] = self.id_gen.get_id()
             keyzone_dict["timeframe"] = keyzone_dict["timeframe"].value
             keyzone_dict["origin_type"] = keyzone_dict["origin_type"].value
@@ -105,5 +98,7 @@ class KeyZoneManager(Observable):
         )
 
     def read_parquet(self):
-        self.df_keyzone = pl.read_parquet(Const.PARQUET_PATH.format(symbol=self.mtc.symbol, filename=f"keyzone"))
+        self.df_keyzone = pl.read_parquet(
+            Const.PARQUET_PATH.format(symbol=self.mtc.symbol, filename=f"keyzone")
+        )
         return self.df_keyzone

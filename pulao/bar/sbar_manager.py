@@ -55,7 +55,7 @@ class SBarManager(Observable):
         row = {
             "id": sbar.id,
             "symbol": sbar.symbol,
-            "exchange": sbar.exchange,
+            "exchange": sbar.exchange.value,
             "timeframe": sbar.timeframe.value,
             "datetime": sbar.datetime,
             "volume": sbar.volume,

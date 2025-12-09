@@ -85,6 +85,7 @@ class KeyZoneOrigin(BaseEnum):
     """
     SWING = "swing"  # 波段
     TREND = "trend"  # 趋势
+    CHANNEL = "channel" # 通道
     EMA = "ema"  # EMA 动态关键位
 
 class KeyZoneOrientation(BaseEnum):
@@ -112,3 +113,15 @@ class Timeframe(BaseEnum):
     M15 = "15m"
     H1 = "1h"
     D1 = "1d"
+
+class Exchange(Enum):
+    """
+    Exchange.
+    """
+    # Chinese
+    CFFEX = "CFFEX"         # China Financial Futures Exchange
+    SHFE = "SHFE"           # Shanghai Futures Exchange
+    CZCE = "CZCE"           # Zhengzhou Commodity Exchange
+    DCE = "DCE"             # Dalian Commodity Exchange
+    INE = "INE"             # Shanghai International Energy Exchange
+    GFEX = "GFEX"           # Guangzhou Futures Exchange
