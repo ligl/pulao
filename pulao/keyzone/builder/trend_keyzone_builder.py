@@ -2,7 +2,7 @@ from typing import List
 
 from pulao.constant import KeyZoneOrigin, Direction, KeyZoneOrientation
 from pulao.keyzone.builder.base_builder import KeyZoneBuilder
-from pulao.keyzone.keyzone import KeyZone
+from pulao.keyzone import KeyZone
 
 
 class TrendKeyZoneBuilder(KeyZoneBuilder):

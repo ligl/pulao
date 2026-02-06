@@ -3,11 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Tuple, TypeVar
 
-from .cbar import CBar
 from pulao.constant import FractalType
-from ..swing.swing import Swing
 
-T = TypeVar('T', CBar, Swing)
+T = TypeVar('T', 'CBar', 'Swing')
 
 @dataclass
 class Fractal:

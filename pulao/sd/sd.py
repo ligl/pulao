@@ -1,6 +1,6 @@
 from typing import Optional
 
-from pulao.bar.sbar import SBar
+from pulao.bar import SBar
 from pulao.object import BaseDecorator
 
 

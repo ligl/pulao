@@ -4,14 +4,14 @@ from collections import defaultdict
 from typing import Optional, Any, List
 
 from pulao.bar.cbar import CBar
-from pulao.bar.sbar import SBar
+from pulao.bar import SBar
 from pulao.bar.sbar_manager import SBarManager
 from pulao.bar.cbar_manager import CBarManager
 from pulao.constant import Timeframe, EventType
 from pulao.events import Observable
 from pulao.swing.swing import Swing
 from pulao.swing.swing_manager import SwingManager
-from pulao.trend.trend import Trend
+from pulao.trend import Trend
 from pulao.trend.trend_manager import TrendManager
 import polars as pl
 

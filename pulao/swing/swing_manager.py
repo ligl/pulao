@@ -5,9 +5,7 @@ from datetime import datetime as Datetime
 
 from pulao.events import Observable
 from .swing import Swing
-from ..bar.cbar import CBar
-from ..bar.cbar_manager import CBarManager
-from ..bar.fractal import Fractal
+from pulao.bar import CBar,CBarManager,Fractal
 from ..constant import (
     EventType,
     Direction,
