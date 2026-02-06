@@ -7,6 +7,7 @@ from datetime import datetime as Datetime
 @dataclass
 class KeyZone:
     """
+    关键位置，即我感兴趣的潜在交易位置，
     KeyZone 本体结构，不包含任何派生属性（如 accept/reject/category 等）。
     表达 KeyZone 的客观几何结构 + 来源 + 基础强度。
     """
@@ -66,7 +67,7 @@ class KeyZone:
         return self.lower <= price <= self.upper
 
     def overlap(self, other: KeyZone) -> bool:
-        return True
+        raise NotImplementedError
 
     def merge(self, other: KeyZone, only_overlap:bool=True) -> KeyZone | None:
         """
@@ -75,4 +76,4 @@ class KeyZone:
         :param only_overlap: 是否只合并有重叠部分的KeyZone
         :return:
         """
-        return None
+        raise NotImplementedError

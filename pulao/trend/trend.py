@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from pulao.constant import Direction
 from datetime import datetime as Datetime
 
+from pulao.sd.sd import SupplyDemand
+
 
 @dataclass
 class Trend:
@@ -57,3 +59,6 @@ class Trend:
         elif self.direction == Direction.DOWN:
             return (self.high_price - price) / span
         return (price - self.low_price) / span
+
+    def sd(self) -> SupplyDemand:
+        raise NotImplementedError

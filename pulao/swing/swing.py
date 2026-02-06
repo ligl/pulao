@@ -6,6 +6,9 @@ from dataclasses import dataclass
 from pulao.constant import Direction
 from datetime import datetime as Datetime
 
+from pulao.sd.sd import SupplyDemand
+
+
 @dataclass
 class Swing:
     """
@@ -68,3 +71,6 @@ class Swing:
 
         # 最大低点 <= 最小高点 表示有重叠
         return max(low_all) <= min(high_all)
+
+    def sd(self) -> SupplyDemand:
+        raise NotImplementedError
