@@ -1,10 +1,7 @@
 from typing import Optional
 
 from pulao.bar import SBar
-from pulao.object import BaseDecorator
 
-
-@BaseDecorator()
 class SupplyDemand:
     """
     # 供需强弱分析(市场状态解释与连续评估系统)

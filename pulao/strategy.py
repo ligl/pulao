@@ -7,10 +7,8 @@ from vnpy_ctastrategy import CtaTemplate
 
 from pulao.bar import SBar
 from pulao.constant import Timeframe
-from pulao.object import BaseDecorator
 from pulao.mtc import MultiTimeframeContext
 
-@BaseDecorator()
 class PulaoStrategy(CtaTemplate):
     author = "Pulao"
 

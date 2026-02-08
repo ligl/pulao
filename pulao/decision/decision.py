@@ -1,8 +1,5 @@
 from pulao.constant import DecisionAction
-from pulao.object import BaseDecorator
 
-
-@BaseDecorator
 class Decision:
 
     def __init__(self, action: DecisionAction):
