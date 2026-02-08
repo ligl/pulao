@@ -5,7 +5,7 @@ from vnpy.trader.constant import \
     Exchange
 from vnpy.trader.object import BarData
 
-from pulao.object import SBar
+from pulao.bar import SBar
 
 # 导入bardata扩展
 
