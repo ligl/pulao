@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from .base import Symbol
 
 
-@dataclass(frozen=True)
+@dataclass(slots=True)
 class CryptoContractSymbol(Symbol):
     asset_type: str = field(default="crypto_contract", init=False)
     multiplier: float

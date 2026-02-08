@@ -7,7 +7,8 @@ from pulao.constant import FractalType
 
 T = TypeVar('T', 'CBar', 'Swing')
 
-@dataclass
+
+@dataclass(slots=True)
 class Fractal:
     left: T
     middle: T
@@ -30,14 +31,14 @@ class Fractal:
         return self.middle.id
 
     @property
-    def cbar_start_id(self) ->int:
+    def cbar_start_id(self) -> int:
         """
         left.index
         """
         return self.left.id
 
     @property
-    def cbar_end_id(self) ->int:
+    def cbar_end_id(self) -> int:
         """
         right.index
         """
@@ -79,19 +80,19 @@ class Fractal:
         """
         if other is None:
             return False
-        if is_strict: # 比较整个分形区间
+        if is_strict:  # 比较整个分形区间
             low1, high1 = self.range()
             low2, high2 = other.range()
-        else: # 只比较分形高低点所在K
+        else:  # 只比较分形高低点所在K
             low1, high1 = self.middle.low_price, self.middle.high_price
             low2, high2 = other.middle.low_price, self.middle.high_price
         return max(low1, low2) <= min(high1, high2)
 
-    def fractal_type(self, strict_model:bool = True) -> FractalType:
+    def fractal_type(self, strict_model: bool = True) -> FractalType:
         return Fractal.verify(self.left, self.middle, self.right, strict_model=strict_model)
 
     @classmethod
-    def verify(cls, left: T, middle: T, right: T, strict_model:bool = False) -> FractalType:
+    def verify(cls, left: T, middle: T, right: T, strict_model: bool = False) -> FractalType:
         """
         判断分形
         :param left: left cbar

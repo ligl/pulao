@@ -6,10 +6,10 @@ from dataclasses import dataclass
 from pulao.constant import Direction
 from datetime import datetime as Datetime
 
-from pulao.sd.sd import SupplyDemand
+from pulao.sd import SupplyDemand
 
 
-@dataclass
+@dataclass(slots=True)
 class Swing:
     """
     一次推动力量，其间没有明显反抗力量，由分形一顶一底相连构成

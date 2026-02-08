@@ -2,17 +2,18 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from ..constant import FractalType
+from pulao.constant import FractalType
 from datetime import datetime as Datetime
 
-@dataclass
+
+@dataclass(slots=True)
 class CBar:
     id: int = None  # cbar_df primary key 类似数据库中的自增id
     sbar_start_id: int = None  # sbar_df id
     sbar_end_id: int = None
     high_price: float = 0
     low_price: float = 0
-    created_at: Datetime = None # 创建时间
+    created_at: Datetime = None  # 创建时间
 
     fractal_type: FractalType = FractalType.NONE
 

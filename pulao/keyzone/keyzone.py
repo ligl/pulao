@@ -4,7 +4,8 @@ from dataclasses import dataclass
 from pulao.constant import KeyZoneOrientation, KeyZoneOrigin, Timeframe
 from datetime import datetime as Datetime
 
-@dataclass
+
+@dataclass(slots=True)
 class KeyZone:
     """
     关键位置，即我感兴趣的潜在交易位置，
@@ -28,7 +29,7 @@ class KeyZone:
     upper: float = None
     lower: float = None
     # 若 orientation == 'channel' 使用
-    trendline_slope: float = None # 若 orientation == 'trendline' 使用
+    trendline_slope: float = None  # 若 orientation == 'trendline' 使用
     trendline_intercept: float = None
     channel_line_slope: float = None
     channel_line_intercept: float = None
@@ -69,7 +70,7 @@ class KeyZone:
     def overlap(self, other: KeyZone) -> bool:
         raise NotImplementedError
 
-    def merge(self, other: KeyZone, only_overlap:bool=True) -> KeyZone | None:
+    def merge(self, other: KeyZone, only_overlap: bool = True) -> KeyZone | None:
         """
         合并KeyZone区间
         :param other:

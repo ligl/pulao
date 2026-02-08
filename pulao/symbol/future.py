@@ -1,10 +1,10 @@
 from dataclasses import dataclass, field
-from typing import List, Optional, Dict
+from typing import Optional
 
-from .base import Symbol, TradingSession
+from .base import Symbol
 
 
-@dataclass(frozen=True)
+@dataclass(slots=True)
 class FeeModel:
     """
     手续费模型：
@@ -18,7 +18,7 @@ class FeeModel:
     taker_rate: float = 0.0
 
 
-@dataclass(frozen=True)
+@dataclass(slots=True)
 class FutureSymbol(Symbol):
     """
     完整的期货合约属性定义

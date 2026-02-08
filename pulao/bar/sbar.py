@@ -1,13 +1,10 @@
 from dataclasses import dataclass
-
 from datetime import datetime as Datetime
 
-from pulao.constant import \
-    Timeframe, \
-    Exchange
+from pulao.constant import Timeframe, Exchange
 
 
-@dataclass
+@dataclass(slots=True)
 class SBar:
     """
     Source/SuperBar , BarData扩展

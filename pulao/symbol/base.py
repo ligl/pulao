@@ -1,9 +1,9 @@
-from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from abc import ABC
+from dataclasses import dataclass
 from typing import List
 
 
-@dataclass(frozen=True)
+@dataclass(slots=True)
 class TradingSession:
     """
     交易时间段，例如：
@@ -16,7 +16,7 @@ class TradingSession:
     """
     sections: List[tuple]     # (start, end)
 
-@dataclass(frozen=True)
+@dataclass(slots=True)
 class Symbol(ABC):
     asset_type: str # 类型：future / stock / crypto / crypto_contract
     code: str # 该合约/标的的唯一名称（rb2505 / AAPL / BTC）

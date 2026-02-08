@@ -1,3 +1,4 @@
+from dataclasses import asdict
 from typing import Any, List
 
 from pulao.constant import EventType, Timeframe, KeyZoneOrigin, Const
@@ -72,7 +73,7 @@ class KeyZoneManager(Observable):
     def _append_keyzone(self, keyzone_list: List[KeyZone]):
         rows = []
         for keyzone in keyzone_list:
-            keyzone_dict = vars(keyzone)
+            keyzone_dict = asdict(keyzone)
             keyzone_dict["id"] = self.id_gen.get_id()
             keyzone_dict["timeframe"] = keyzone_dict["timeframe"].value
             keyzone_dict["origin_type"] = keyzone_dict["origin_type"].value
