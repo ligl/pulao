@@ -3,6 +3,15 @@
 *.pyo
 *.pyd
 *.egg-info/
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+
+# Virtual environments
+.venv
 
 # Jupyter
 .ipynb_checkpoints
@@ -48,5 +57,4 @@ lab/
 # 排除其他项目
 vnpy/
 ytc/
-/examples/logs/pulao.log
-/examples/logs/pulao.log.2025-11-24
+/examples/logs/

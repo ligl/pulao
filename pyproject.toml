@@ -1,0 +1,23 @@
+[project]
+name = "pulao"
+version = "0.0.1"
+description = "A assistant for trader"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "concurrent-log-handler>=0.9.28",
+    "polars>=1.38.1",
+    "pyyaml>=6.0.3",
+    "structlog>=25.5.0",
+]
+
+[dependency-groups]
+dev = [
+    "chinese-calendar>=1.11.0",
+    "numpy>=2.4.2",
+    "pandas>=3.0.0",
+    "plotly>=6.5.2",
+]
+
+[tool.autopep8]
+max-line-length = 120

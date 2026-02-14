@@ -1,5 +1,6 @@
 from enum import Enum
 
+
 class ReadOnlyMeta(type):
     def __call__(cls, *args, **kwargs):
         raise TypeError(f"Class: {cls.__name__} cannot be instantiated")
@@ -7,12 +8,13 @@ class ReadOnlyMeta(type):
     def __setattr__(cls, name, value):
         raise AttributeError(f"Class attribute: '{name}' is read-only")
 
+
 class Const(metaclass=ReadOnlyMeta):
     DEBUG: bool = True  # 系统模式
     LOOKBACK_LIMIT: int = (
         300  # 检查前一个波段/趋势时，向前回溯的K线数量，越过这个数量就不再关注
     )
-    PARQUET_PATH:str = "../dataset/{symbol}/{filename}.parquet"
+    PARQUET_PATH: str = "../dataset/{symbol}/{filename}.parquet"
 
 
 class BaseEnum(Enum):
@@ -43,6 +45,7 @@ class BaseEnum(Enum):
 
         raise ValueError(f"{value!r} is not a valid {cls.__name__}")
 
+
 class FractalType(BaseEnum):
     """
     分形类型
@@ -50,6 +53,7 @@ class FractalType(BaseEnum):
     TOP = 1
     BOTTOM = -1
     NONE = 0
+
 
 class Direction(BaseEnum):
     """
@@ -59,6 +63,7 @@ class Direction(BaseEnum):
     DOWN = -1
     RANGE = 2
     NONE = 0
+
     @property
     def opposite(self):
         if self == Direction.UP:
@@ -67,6 +72,7 @@ class Direction(BaseEnum):
             return Direction.UP
         else:
             return Direction.NONE
+
 
 class DecisionAction(BaseEnum):
     """
@@ -85,13 +91,15 @@ class KeyZoneOrigin(BaseEnum):
     """
     SWING = "swing"  # 波段
     TREND = "trend"  # 趋势
-    CHANNEL = "channel" # 通道
+    CHANNEL = "channel"  # 通道
     EMA = "ema"  # EMA 动态关键位
+
 
 class KeyZoneOrientation(BaseEnum):
     HORIZONTAL = 1
     TRENDLINE = 2
     CHANNEL = 3
+
 
 class EventType(BaseEnum):
     """
@@ -104,6 +112,7 @@ class EventType(BaseEnum):
     MTC_NEW_BAR = "mtc.new_bar"
     TIMEFRAME_END = "mtc.timeframe.end"
 
+
 class Timeframe(BaseEnum):
     """
     时间周期
@@ -113,6 +122,7 @@ class Timeframe(BaseEnum):
     M15 = "15m"
     H1 = "1h"
     D1 = "1d"
+
 
 class Exchange(Enum):
     """

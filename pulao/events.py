@@ -5,6 +5,7 @@ from pulao.constant import EventType, Timeframe
 
 Subscriber = Callable[[Timeframe, EventType, Any], None]
 
+
 class Observable:
     ALL = "ALL_EVENTS"  # 通配符，表示订阅所有事件
 

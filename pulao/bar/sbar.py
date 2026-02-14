@@ -10,7 +10,7 @@ class SBar:
     Source/SuperBar , BarData扩展
     """
 
-    id: int = None # 在SBarManager数据源中的索引，类似数据库中的自增id
+    id: int = None  # 在SBarManager数据源中的索引，类似数据库中的自增id
 
     symbol: str = None
     exchange: Exchange = None

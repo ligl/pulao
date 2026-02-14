@@ -6,6 +6,7 @@ from .registry import SymbolRegistry
 from .future import FutureSymbol
 from .crypto_contract import CryptoContractSymbol
 
+
 class SymbolLoader:
 
     CLASS_MAP = {
