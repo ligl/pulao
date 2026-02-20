@@ -21,3 +21,6 @@ dev = [
 
 [tool.autopep8]
 max-line-length = 120
+
+# [build-system]
+# requires = ["setuptools", "wheel"]

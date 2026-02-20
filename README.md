@@ -31,6 +31,10 @@ data/
 
 ```
 
+# dev
+- uv sync
+- uv pip install -e . # 在jupyter中使用pulao package
+
 
 # Q&A
 1. 波段/趋势起点如何选择？
