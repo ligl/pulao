@@ -58,3 +58,8 @@ lab/
 vnpy/
 ytc/
 /examples/logs/
+
+target/
+docs/rust-migration.md
+scripts/compare_python_rust_replay.py
+docs/rust-migration.md
