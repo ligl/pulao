@@ -19,8 +19,20 @@ dev = [
     "plotly>=6.5.2",
 ]
 
-[tool.autopep8]
-max-line-length = 120
+[tool.black]
+line-length = 120
+target-version = ["py311"]
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B"]  # 基础 + 常见 bug
+ignore = ["E501"]              # 行长度交给 Black
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
 
 # [build-system]
 # requires = ["setuptools", "wheel"]

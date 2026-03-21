@@ -4,7 +4,7 @@ import os
 import logging
 import signal
 import sys
-from logging.handlers import QueueHandler, QueueListener, TimedRotatingFileHandler
+from logging.handlers import QueueHandler, QueueListener
 from queue import Queue
 import structlog
 from concurrent_log_handler import ConcurrentTimedRotatingFileHandler
