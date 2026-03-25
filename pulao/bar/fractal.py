@@ -32,35 +32,35 @@ class Fractal:
     @property
     def id(self) -> int:
         """
-        middle.index
+        middle.id
         """
         return self.middle.id
 
     @property
     def cbar_start_id(self) -> int:
         """
-        left.index
+        left.id
         """
         return self.left.id
 
     @property
     def cbar_end_id(self) -> int:
         """
-        right.index
+        right.id
         """
         return self.right.id
 
     @property
     def sbar_start_id(self) -> int:
         """
-        left.start_index
+        left.sbar_start_id
         """
         return self.left.sbar_start_id
 
     @property
     def sbar_end_id(self) -> int:
         """
-        right.end_index
+        right.sbar_end_id
         """
         return self.right.sbar_end_id
 

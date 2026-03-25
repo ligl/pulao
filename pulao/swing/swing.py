@@ -10,7 +10,12 @@ from datetime import datetime as Datetime
 from pulao.sd import SupplyDemand
 
 class SwingState(Enum):
-    Unknown = 0  # 初始状态，尚未确定波段状态
+    """
+    波段状态枚举
+    Extending = 1  # 当前方向正在延展
+    Tentative = 2  # 已出现反向候选，等待后继 swing 证明其有效
+    Confirmed = 3  # 已被后继反向 swing 确认终结
+    """
     Extending = 1  # 当前方向正在延展
     Tentative = 2  # 已出现反向候选，等待后继 swing 证明其有效
     Confirmed = 3  # 已被后继反向 swing 确认终结
@@ -34,13 +39,14 @@ class Swing:
     volume: float
     span: float = 0 # 横跨多少根sbar
 
-    is_completed: bool = False  # 波段是否完成
     state : SwingState = SwingState.Extending  # 波段状态
     created_at: Datetime = Datetime.now()  # 创建时间
 
     def __post_init__(self):
         if isinstance(self.direction, int):
             self.direction = Direction(self.direction)
+        if isinstance(self.state, int):
+            self.state = SwingState(self.state)
 
     @property
     def distance(self):
@@ -55,6 +61,10 @@ class Swing:
     @property
     def angle(self):
         return math.degrees(math.atan(self.slope))
+
+    @property
+    def is_completed(self) -> bool:
+        return self.state == SwingState.Confirmed
 
     def contains(self, price: float) -> bool:
         return self.low_price <= price <= self.high_price

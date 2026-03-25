@@ -211,8 +211,8 @@ class CBarManager(Observable):
 
         # 分形判断
         # 取最近的3条bar，判断是否为分形
-        last_bar_list = self.get_last_cbar(3)
-        if last_bar_list is None or not isinstance(last_bar_list, list) or len(last_bar_list) != 3:  # k线数量不够，不符合分形判断条数要求
+        last_bar_list = self.get_last_cbars(3)
+        if last_bar_list is None or len(last_bar_list) != 3:  # k线数量不够，不符合分形判断条数要求
             return
 
         left_bar, middle_bar, right_bar = last_bar_list
@@ -236,14 +236,16 @@ class CBarManager(Observable):
         else:
             return idx
 
-    def get_last_cbar(self, count:int | None = None) -> List[CBar] | CBar | None:
-        if count is None:
-            count = 1
-        df = self.df_cbar.tail(count)
-        if df.is_empty():
+    def get_last_cbar(self) -> CBar | None:
+        if self.df_cbar.is_empty():
             return None
-        if count == 1:
-            return CBar(**df.row(0, named=True))
+        last_row = self.df_cbar.tail(1).row(0, named=True)
+        return CBar(**last_row)
+
+    def get_last_cbars(self, count:int) -> List[CBar] | None:
+        if self.df_cbar.is_empty():
+            return None
+        df = self.df_cbar.tail(count)
         return  [CBar(**row) for row in df.rows(named=True)]
 
     def get_cbar_list(self, start_id:int, end_id:int|None=None)->List[CBar] | None:
@@ -291,17 +293,16 @@ class CBarManager(Observable):
     def get_limit_sbar_id(self, start_id:int ,end_id:int, arg:Literal["max","min"])->int | None:
         return self.sbar_manager.get_limit_sbar_id(start_id, end_id, arg)
 
-    def get_nearest_cbar(self, id:int, count:int | None = None) -> None | CBar | List[CBar]:
+    def get_nearest_cbars(self, id:int, count:int | None = None) -> None | List[CBar]:
         """
-        获取指定id向前/向后 count个cbar
-        :param id:
+        获取指定id向前/向后 count个cbar，如果count为None，则获取到结尾
+        :param id: id
         :param count: 正数向后，负数向前，None:获取到结尾
-        :return: None | CBar | List[CBar]
+        :return: None | List[CBar]
         """
         idx = self.df_cbar.select(pl.col("id").search_sorted(id)).item()
         if idx is None or idx >= self.df_cbar.height:
             return None
-        is_return_single = (count == 1 or count == -1) if count else False
         if count is None:
             count = self.df_cbar.height - 1
         if count < 0:  # 向前
@@ -321,8 +322,6 @@ class CBarManager(Observable):
         df = self.df_cbar.slice(start_index, end_index - start_index + 1)
         if df.is_empty():
             return None
-        if is_return_single:
-            return CBar(**df.row(0, named=True))
 
         return [CBar(**row) for row in df.rows(named=True)]
 
