@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from enum import Enum
 import math
 from dataclasses import dataclass
 
@@ -8,28 +9,34 @@ from datetime import datetime as Datetime
 
 from pulao.sd import SupplyDemand
 
+class SwingState(Enum):
+    Unknown = 0  # 初始状态，尚未确定波段状态
+    Extending = 1  # 当前方向正在延展
+    Tentative = 2  # 已出现反向候选，等待后继 swing 证明其有效
+    Confirmed = 3  # 已被后继反向 swing 确认终结
 
 @dataclass(slots=True)
 class Swing:
     """
     一次推动力量，其间没有明显反抗力量，由分形一顶一底相连构成
     """
-    id: int = None # swing_df 中 自增id
-    direction: Direction = None
-    cbar_start_id: int = None  # 波段起始点id cbar_df
-    cbar_end_id: int = None
-    sbar_start_id: int = None  # sbar_df id
-    sbar_end_id: int = None
-    high_price: float = 0
-    low_price: float = 0
+    id: int # swing_df 中 自增id
+    direction: Direction
+    cbar_start_id: int  # 波段起始点id cbar_df
+    cbar_end_id: int
+    sbar_start_id: int  # sbar_df id
+    sbar_end_id: int
+    high_price: float
+    low_price: float
 
+    start_oi: float
+    end_oi: float
+    volume: float
     span: float = 0 # 横跨多少根sbar
-    volume: float = 0
-    start_oi: float = None
-    end_oi: float = None
 
     is_completed: bool = False  # 波段是否完成
-    created_at: Datetime = None  # 创建时间
+    state : SwingState = SwingState.Extending  # 波段状态
+    created_at: Datetime = Datetime.now()  # 创建时间
 
     def __post_init__(self):
         if isinstance(self.direction, int):

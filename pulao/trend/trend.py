@@ -13,23 +13,23 @@ class Trend:
     一个方向上力量占优的波段序列，每个趋势至少包含3个有重叠的波段（允许更长波段序列）
     """
 
-    id: int = None
-    direction: Direction = None  # up / down / range
-    swing_start_id: int = None  # swing_df
-    swing_end_id: int = None
-    high_price: float = 0
-    low_price: float = 0
+    id: int | None = None
+    direction: Direction | None = None  # up / down / range
+    swing_start_id: int | None = None  # swing_df
+    swing_end_id: int | None = None
+    high_price: float | None = None
+    low_price: float | None = None
 
-    sbar_start_id: int = None  # sbar_df id
-    sbar_end_id: int = None
+    sbar_start_id: int | None = None  # sbar_df id
+    sbar_end_id: int | None = None
 
     span: float = 0  # 横跨多少根sbar
     volume: float = 0
-    start_oi: float = None
-    end_oi: float = None
+    start_oi: float | None = None
+    end_oi: float | None = None
 
     is_completed: bool = False  # 趋势是否完成
-    created_at: Datetime = None  # 创建时间
+    created_at: Datetime | None = None  # 创建时间
 
     def __post_init__(self):
         if isinstance(self.direction, int):
@@ -37,6 +37,8 @@ class Trend:
 
     @property
     def distance(self):
+        if self.high_price is None or self.low_price is None:
+            return 0
         return self.high_price - self.low_price
 
     @property
@@ -50,9 +52,13 @@ class Trend:
         return math.degrees(math.atan(self.slope))
 
     def contains(self, price: float) -> bool:
+        if self.low_price is None or self.high_price is None:
+            return False
         return self.low_price <= price <= self.high_price
 
     def price_ratio(self, price: float) -> float:
+        if self.low_price is None or self.high_price is None:
+            return 0
         span = max(self.high_price - self.low_price, 1e-9)
         if self.direction == Direction.UP:
             return (price - self.low_price) / span

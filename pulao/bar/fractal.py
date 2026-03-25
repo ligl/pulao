@@ -1,18 +1,24 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Tuple, TypeVar
+from typing import Protocol, Tuple
 
 from pulao.constant import FractalType
 
-T = TypeVar('T', 'CBar', 'Swing')
 
+class Fractalable(Protocol):
+    id: int
+    sbar_start_id: int
+    sbar_end_id: int
+    low_price: float
+    high_price: float
+    fractal_type: FractalType
 
 @dataclass(slots=True)
 class Fractal:
-    left: T
-    middle: T
-    right: T
+    left: Fractalable
+    middle: Fractalable
+    right: Fractalable
 
     def range(self) -> Tuple[float, float]:
         """
@@ -85,14 +91,14 @@ class Fractal:
             low2, high2 = other.range()
         else:  # 只比较分形高低点所在K
             low1, high1 = self.middle.low_price, self.middle.high_price
-            low2, high2 = other.middle.low_price, self.middle.high_price
+            low2, high2 = other.middle.low_price, other.middle.high_price
         return max(low1, low2) <= min(high1, high2)
 
     def fractal_type(self, strict_model: bool = True) -> FractalType:
         return Fractal.verify(self.left, self.middle, self.right, strict_model=strict_model)
 
     @classmethod
-    def verify(cls, left: T, middle: T, right: T, strict_model: bool = False) -> FractalType:
+    def verify(cls, left: Fractalable, middle: Fractalable, right: Fractalable, strict_model: bool = False) -> FractalType:
         """
         判断分形
         :param left: left cbar

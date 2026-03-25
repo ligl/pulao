@@ -1,6 +1,4 @@
-from typing import List
-
-from polars import Datetime
+from typing import List, Literal
 
 from pulao.events import Observable
 from pulao.indicator import IndicatorManager, EmaIndicator
@@ -30,6 +28,7 @@ class SBarManager(Observable):
             "low_price": pl.Float32,
             "close_price": pl.Float32,
             "volume": pl.Float32,  # 部分品种成交量是浮点
+            "turnover": pl.Float32,
             "open_interest": pl.Float32,
             "ema_short": pl.Float32,
             "ema_long": pl.Float32,
@@ -37,7 +36,7 @@ class SBarManager(Observable):
         }
         self.df_sbar: pl.DataFrame = pl.DataFrame(schema=schema)
 
-        self.symbol = symbol
+        self.symbol = symbol.lower()
         self.timeframe: Timeframe = timeframe
         self.indicator_manager: IndicatorManager = IndicatorManager()
         self.indicator_manager.register(EmaIndicator(20))
@@ -59,6 +58,7 @@ class SBarManager(Observable):
             "timeframe": sbar.timeframe.value,
             "datetime": sbar.datetime,
             "volume": sbar.volume,
+            "turnover": sbar.turnover,
             "open_interest": sbar.open_interest,
             "open_price": sbar.open_price,
             "high_price": sbar.high_price,
@@ -86,13 +86,15 @@ class SBarManager(Observable):
         else:
             return idx
 
-    def get_at_id(self, id: int) -> SBar:
+    def get_at_id(self, id: int) -> SBar | None:
         return self.get_at_index(self.get_index(id))
 
-    def get_at_index(self, index: int) -> SBar:
+    def get_at_index(self, index: int | None) -> SBar | None:
+        if index is None:
+            return None
         return SBar(**self.df_sbar.row(index, named=True))
 
-    def get_at_time(self, dt: Datetime) -> SBar:
+    def get_at_time(self, dt: Datetime) -> SBar | None:
         index = self.df_sbar.select(pl.col("datetime").search_sorted(dt)).item()
         return self.get_at_index(index)
 
@@ -102,7 +104,7 @@ class SBarManager(Observable):
             return None
         return [SBar(**row) for row in df.rows(named=True)]
 
-    def get_limit_sbar(self, start_id: int, end_id: int, arg=str) -> SBar | None:
+    def get_limit_sbar(self, start_id: int, end_id: int, arg: Literal["max","min"]) -> SBar | None:
         """
         获取一段区间[start_id, end_id]中的最高价或最低价，即max(high_price)或min(low_price)
         :param start_id:
@@ -128,7 +130,7 @@ class SBarManager(Observable):
             index = df["low_price"].arg_min()
         return SBar(**df.row(index, named=True))
 
-    def get_limit_sbar_id(self, start_id: int, end_id: int, arg=str) -> int | None:
+    def get_limit_sbar_id(self, start_id: int, end_id: int, arg: Literal["max","min"]) -> int | None:
         sbar = self.get_limit_sbar(start_id, end_id, arg)
         if sbar is None:
             return None
@@ -152,6 +154,8 @@ class SBarManager(Observable):
         :return:
         """
         idx = self.get_index(pivot_id)
+        if idx is None:
+            return None
 
         start_index = idx - length
         end_index = idx + length

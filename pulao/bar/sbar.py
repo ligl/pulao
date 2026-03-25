@@ -10,25 +10,25 @@ class SBar:
     Source/SuperBar , BarData扩展
     """
 
-    id: int = None  # 在SBarManager数据源中的索引，类似数据库中的自增id
+    id: int  # 在SBarManager数据源中的索引，类似数据库中的自增id
 
-    symbol: str = None
-    exchange: Exchange = None
-    timeframe: Timeframe = None
+    symbol: str
+    exchange: Exchange
+    timeframe: Timeframe
 
-    datetime: Datetime = None
-    volume: float = 0
-    turnover: float = 0
-    open_interest: float = 0
-    open_price: float = 0
-    high_price: float = 0
-    low_price: float = 0
-    close_price: float = 0
+    datetime: Datetime
+    volume: float
+    turnover: float
+    open_interest: float
+    open_price: float
+    high_price: float
+    low_price: float
+    close_price: float
 
-    ema_short: float = 0
-    ema_long: float = 0
+    ema_short: float
+    ema_long: float
 
-    created_at: Datetime = None
+    created_at: Datetime
 
     def __post_init__(self):
         if isinstance(self.timeframe, str):

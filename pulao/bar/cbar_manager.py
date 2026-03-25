@@ -212,7 +212,7 @@ class CBarManager(Observable):
         # 分形判断
         # 取最近的3条bar，判断是否为分形
         last_bar_list = self.get_last_cbar(3)
-        if last_bar_list is None or len(last_bar_list) != 3:  # k线数量不够，不符合分形判断条数要求
+        if last_bar_list is None or not isinstance(last_bar_list, list) or len(last_bar_list) != 3:  # k线数量不够，不符合分形判断条数要求
             return
 
         left_bar, middle_bar, right_bar = last_bar_list
@@ -227,14 +227,16 @@ class CBarManager(Observable):
                 return
             self.df_cbar[index,"fractal_type"] = fractal_type.value
 
-    def get_index(self, id: int) -> int | None:
+    def get_index(self, id: int|None) -> int | None:
+        if id is None:
+            return None
         idx = self.df_cbar.select(pl.col("id").search_sorted(id)).item()
         if idx >= self.df_cbar.height or self.df_cbar["id"][idx] != id:
             return None
         else:
             return idx
 
-    def get_last_cbar(self, count:int = None) -> List[CBar] | CBar | None:
+    def get_last_cbar(self, count:int | None = None) -> List[CBar] | CBar | None:
         if count is None:
             count = 1
         df = self.df_cbar.tail(count)
@@ -244,7 +246,7 @@ class CBarManager(Observable):
             return CBar(**df.row(0, named=True))
         return  [CBar(**row) for row in df.rows(named=True)]
 
-    def get_cbar_list(self, start_id:int, end_id:int=None)->List[CBar] | None:
+    def get_cbar_list(self, start_id:int, end_id:int|None=None)->List[CBar] | None:
         start_index = self.get_index(start_id)
         if end_id is None:
             end_index = self.df_cbar.height - 1
@@ -289,7 +291,7 @@ class CBarManager(Observable):
     def get_limit_sbar_id(self, start_id:int ,end_id:int, arg:Literal["max","min"])->int | None:
         return self.sbar_manager.get_limit_sbar_id(start_id, end_id, arg)
 
-    def get_nearest_cbar(self, id:int, count:int=None) -> None | CBar | List[CBar]:
+    def get_nearest_cbar(self, id:int, count:int | None = None) -> None | CBar | List[CBar]:
         """
         获取指定id向前/向后 count个cbar
         :param id:
@@ -324,7 +326,7 @@ class CBarManager(Observable):
 
         return [CBar(**row) for row in df.rows(named=True)]
 
-    def get_fractal(self, id: int = None) -> Fractal | None:
+    def get_fractal(self, id: int | None = None) -> Fractal | None:
         if id is None:
             # 取最新的分形
             id = self.df_cbar.tail(Const.LOOKBACK_LIMIT).filter(pl.col("fractal_type") != FractalType.NONE).tail(1).select(pl.col("id")).item()

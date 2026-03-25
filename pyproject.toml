@@ -5,18 +5,24 @@ description = "A assistant for trader"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
-    "concurrent-log-handler>=0.9.28",
-    "polars>=1.38.1",
+    "concurrent-log-handler>=0.9.29",
+    "polars>=1.39.3",
     "pyyaml>=6.0.3",
     "structlog>=25.5.0",
 ]
 
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [dependency-groups]
 dev = [
     "chinese-calendar>=1.11.0",
-    "numpy>=2.4.2",
-    "pandas>=3.0.0",
-    "plotly>=6.5.2",
+    "nbformat>=5.10.4",
+    "numpy>=2.4.3",
+    "pandas>=3.0.1",
+    "plotly>=6.6.0",
+    "pyarrow>=23.0.1",
 ]
 
 [tool.black]
@@ -34,5 +40,5 @@ ignore = ["E501"]              # 行长度交给 Black
 quote-style = "double"
 indent-style = "space"
 
-# [build-system]
-# requires = ["setuptools", "wheel"]
+[tool.setuptools.packages.find]
+include = ["pulao"]
