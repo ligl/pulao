@@ -42,7 +42,7 @@ class SwingManager(Observable):
         self.cbar_manager: CBarManager = cbar_manager
         self.cbar_manager.subscribe(self._on_cbar_changed, EventType.CBAR_CHANGED)
         self.id_gen = IDGenerator(worker_id=4)
-        self.backtrack_id: int | None = (
+        self.backtrack_swing_id: int | None = (
             None  # swing变动之后，告诉订阅者，从哪个swing id开始重新计算，大于等于此id的都要被重新计算
         )
         self.symbol = self.cbar_manager.symbol
@@ -50,7 +50,7 @@ class SwingManager(Observable):
         self.swing_builder = _SwingBuilder(self)
 
     def _on_cbar_changed(self, timeframe: Timeframe, event: EventType, payload: Any):
-        self.backtrack_id = None
+        self.backtrack_swing_id = None
         cbar_backtrack_id = payload.get("backtrack_id", None)
         # 波段检测识别
 
@@ -61,7 +61,7 @@ class SwingManager(Observable):
             self.swing_builder._clean_backtrack(cbar_backtrack_id)
             self.swing_builder._backtrack_replay(cbar_backtrack_id)
         self.write_parquet()
-        self.notify(timeframe, EventType.SWING_CHANGED, backtrack_id=self.backtrack_id)
+        self.notify(timeframe, EventType.SWING_CHANGED, backtrack_id=self.backtrack_swing_id)
 
     def write_parquet(self):
         # TODO 实时行情不能这么做，需要考虑性能影响
@@ -79,11 +79,11 @@ class SwingManager(Observable):
         )
         return self.df_swing
 
-    def get_swing_fractal(self, swing_id: int|Swing) -> tuple[Fractal|None, Fractal|None]:
+    def get_swing_fractal(self, swing_id: int | Swing) -> tuple[Fractal | None, Fractal | None]:
         if isinstance(swing_id, Swing):
             swing = swing_id
         else:
-           swing = self.get_swing(swing_id)
+            swing = self.get_swing(swing_id)
         if swing is None:
             return None, None
         start_fractal = self.cbar_manager.get_fractal(swing.cbar_start_id)
@@ -415,6 +415,7 @@ class _SwingDiscover:
 
             return new_swing
 
+
 class _SwingBuilder:
     """
     波段构建器，负责根据k线数据构建波段
@@ -471,7 +472,9 @@ class _SwingBuilder:
             raise AssertionError("不应该执行这里！已经有波段了，却获取不到最后一个波段")
         prev_swing = self.swing_manager.prev_swing(last_swing.id)  # 获取最后一个波段的前一个波段，无论是否完成
         if prev_swing is None:
-            logger.error("不应该执行这里！已经有波段了，却获取不到最后一个波段的前一个波段", df_swing=self.swing_manager.df_swing)
+            logger.error(
+                "不应该执行这里！已经有波段了，却获取不到最后一个波段的前一个波段", df_swing=self.swing_manager.df_swing
+            )
             raise AssertionError("不应该执行这里！已经有波段了，却获取不到最后一个波段的前一个波段")
 
         fractal_type = curr_fractal.fractal_type()
@@ -496,13 +499,8 @@ class _SwingBuilder:
                     prev_swing.sbar_end_id = last_bar.sbar_end_id
                     prev_swing.high_price = max(prev_swing.high_price, last_bar.high_price)
                     prev_swing.low_price = min(prev_swing.low_price, last_bar.low_price)
-                    sbar_stat = self.get_sbar_stat(prev_swing.sbar_start_id, prev_swing.sbar_end_id)  # 更新sbar相关统计信息
-                    if sbar_stat:
-                        prev_swing.volume = sbar_stat["volume"]
-                        prev_swing.span = sbar_stat["span"]
-                        prev_swing.start_oi = sbar_stat["start_oi"]
-                        prev_swing.end_oi = sbar_stat["end_oi"]
-                    self._del_last_swing()
+
+                    self._del_swing()
                     self._update_swing(prev_swing)
                 else:
                     # 没有打破之前的波段，继续延续当前波段
@@ -517,12 +515,7 @@ class _SwingBuilder:
                     last_swing.sbar_end_id = last_bar.sbar_end_id
                     last_swing.high_price = max(last_swing.high_price, last_bar.high_price)
                     last_swing.low_price = min(last_swing.low_price, last_bar.low_price)
-                    sbar_stat = self.get_sbar_stat(last_swing.sbar_start_id, last_swing.sbar_end_id)  # 更新sbar相关统计信息
-                    if sbar_stat:
-                        last_swing.volume = sbar_stat["volume"]
-                        last_swing.span = sbar_stat["span"]
-                        last_swing.start_oi = sbar_stat["start_oi"]
-                        last_swing.end_oi = sbar_stat["end_oi"]
+
                     self._update_swing(last_swing)
 
             case FractalType.BOTTOM | FractalType.TOP:
@@ -534,7 +527,7 @@ class _SwingBuilder:
                 # 2.1. 当前波段可能延续，等待后续分形确认;
                 # 2.2 当前波段的起点可能需要调整（新的底分型比波段起点底分型还低），更当前波段last_swing的起点，并更新前一波段prev_swing的终点
                 is_valid_swing = self.detect_swing(
-                    start_fractal= self.swing_manager.get_swing_fractal(last_swing)[0],  # 波段起点分型
+                    start_fractal=self.swing_manager.get_swing_fractal(last_swing)[0],  # 波段起点分型
                     end_fractal=curr_fractal,
                     direction=last_swing.direction,
                     curr_swing=last_swing,
@@ -554,12 +547,6 @@ class _SwingBuilder:
                     last_swing.sbar_end_id = curr_fractal.sbar_end_id
                     last_swing.high_price = max(last_swing.high_price, curr_fractal.high_price)
                     last_swing.low_price = min(last_swing.low_price, curr_fractal.low_price)
-                    sbar_stat = self.get_sbar_stat(last_swing.sbar_start_id, last_swing.sbar_end_id)  # 更新sbar相关统计信息
-                    if sbar_stat:
-                        last_swing.volume = sbar_stat["volume"]
-                        last_swing.span = sbar_stat["span"]
-                        last_swing.start_oi = sbar_stat["start_oi"]
-                        last_swing.end_oi = sbar_stat["end_oi"]
 
                     self._update_swing(last_swing)
 
@@ -592,12 +579,7 @@ class _SwingBuilder:
                     last_swing.sbar_end_id = curr_fractal.sbar_end_id
                     last_swing.high_price = max(last_swing.high_price, curr_fractal.high_price)
                     last_swing.low_price = min(last_swing.low_price, curr_fractal.low_price)
-                    sbar_stat = self.get_sbar_stat(last_swing.sbar_start_id, last_swing.sbar_end_id)  # 更新sbar相关统计信息
-                    if sbar_stat:
-                        last_swing.volume = sbar_stat["volume"]
-                        last_swing.span = sbar_stat["span"]
-                        last_swing.start_oi = sbar_stat["start_oi"]
-                        last_swing.end_oi = sbar_stat["end_oi"]
+
                     self._update_swing(last_swing)
 
             case _:
@@ -652,17 +634,26 @@ class _SwingBuilder:
             }
         return None
 
-    def _del_last_swing(self):
-        last_swing = self.swing_manager.get_last_swing()
-        if last_swing:
-            self.swing_manager.backtrack_id = (
-                min(last_swing.id, self.swing_manager.backtrack_id)
-                if self.swing_manager.backtrack_id
-                else last_swing.id
+    def _del_swing(self, del_from_id: int | None = None):
+        """
+        删除波段，如果指定了del_from_id，则删除del_from_id及其之后的波段，否则删除最后一个波段
+        @param del_from_id: 从哪个波段开始删除，如果没有指定，则删除最后一个波段
+        """
+        if del_from_id is None:
+            del_from_swing = self.swing_manager.get_last_swing()
+        else:
+            del_from_swing = self.swing_manager.get_swing(del_from_id)
+
+        if del_from_swing:
+            self.swing_manager.backtrack_swing_id = (
+                min(del_from_swing.id, self.swing_manager.backtrack_swing_id)
+                if self.swing_manager.backtrack_swing_id
+                else del_from_swing.id
             )
+            del_from_swing_idx = self.swing_manager.get_idx(del_from_swing.id)
             self.swing_manager.df_swing = self.swing_manager.df_swing.slice(
-                0, self.swing_manager.df_swing.height - 1
-            )  # 删除未完成的波段
+                0, del_from_swing_idx
+            )  # 删除from_swing_id及其之后的波段
 
     def _append_swing(
         self,
@@ -755,7 +746,9 @@ class _SwingBuilder:
                 "created_at": Datetime.now(),
             }
             logger.info(
-                "新创建的波段状态不是Extending，说明之前的波段被打破了，需要创建一个反向的Extending波段",source_swing=new_swing,attach_swing=attach_swing
+                "新创建的波段状态不是Extending，说明之前的波段被打破了，需要创建一个反向的Extending波段",
+                source_swing=new_swing,
+                attach_swing=attach_swing,
             )
             data.append(attach_swing)
 
@@ -763,7 +756,7 @@ class _SwingBuilder:
             pl.DataFrame(data, schema=self.swing_manager.df_swing.schema)
         )
 
-    def _update_swing(self, swing: Swing, update_swing_id:bool=True):
+    def _update_swing(self, swing: Swing, update_swing_id: bool = True):
         """
         更新波段信息
         :param swing: 要更新的波段信息
@@ -773,11 +766,18 @@ class _SwingBuilder:
         if idx is None:
             logger.error("未找到要更新的波段在df_swing中的位置", swing=swing)
             raise AssertionError("未找到要更新的波段在df_swing中的位置")
-        self.swing_manager.backtrack_id = (
-            min(swing.id, self.swing_manager.backtrack_id) if self.swing_manager.backtrack_id else swing.id
+        self.swing_manager.backtrack_swing_id = (
+            min(swing.id, self.swing_manager.backtrack_swing_id) if self.swing_manager.backtrack_swing_id else swing.id
         )  # 记录回溯id
         if update_swing_id:
             self.swing_manager.df_swing[idx, "id"] = self.swing_manager.id_gen.get_id()
+        sbar_stat = self.get_sbar_stat(swing.sbar_start_id, swing.sbar_end_id)  # 更新sbar相关统计信息
+        if sbar_stat:
+            swing.volume = sbar_stat["volume"]
+            swing.span = sbar_stat["span"]
+            swing.start_oi = sbar_stat["start_oi"]
+            swing.end_oi = sbar_stat["end_oi"]
+
         self.swing_manager.df_swing[idx, "direction"] = swing.direction.value
         self.swing_manager.df_swing[idx, "cbar_start_id"] = swing.cbar_start_id
         self.swing_manager.df_swing[idx, "cbar_end_id"] = swing.cbar_end_id
@@ -880,46 +880,54 @@ class _SwingBuilder:
 
         return False
 
-    def _clean_backtrack(self, cbar_backtrack_id: int):
+    def _clean_backtrack(self, backtrack_cbar_id: int):
         df = self.swing_manager.df_swing.filter(
-            (pl.col("cbar_start_id") <= cbar_backtrack_id) & (cbar_backtrack_id <= pl.col("cbar_end_id"))
+            (pl.col("cbar_start_id") <= backtrack_cbar_id) & (backtrack_cbar_id <= pl.col("cbar_end_id"))
         )
         if df.is_empty():
             return
 
-        del_swing = Swing(**df.row(0, named=True))
-        del_swing_idx = self.swing_manager.get_idx(del_swing.id)
+        del_from_swing = Swing(**df.row(0, named=True))
 
-        self.swing_manager.df_swing = self.swing_manager.df_swing.slice(
-            0, del_swing_idx
-        )  # 删除从第一个traceback_id出现时的波段
-        # TODO 更新最后一条记录的state
+        self._del_swing(del_from_swing.id)  # 删除del_from_swing及其之后的波段
 
-        # 取出删除之前最后处理的cbar,填补swing信息
-        end_bar = self.swing_manager.cbar_manager.get_nearest_cbars(cbar_backtrack_id, -1)
-        logger.debug("swing中需删除backtrack_id后，重新开始的位置", end_bar=end_bar)
-        if end_bar:  # 如果end_bar为None，说明df_cbar在traceback_id之前已没有数据，重新构建波段
-            # 不为None，修改del_swing并重新添加到df_swing
-            end_bar = end_bar[0]
-            if del_swing.cbar_start_id == cbar_backtrack_id:  # 在波段起点
-                del_swing.cbar_start_id = end_bar.id
-                del_swing.sbar_start_id = end_bar.sbar_start_id
+        prev_cbars = self.swing_manager.cbar_manager.get_nearest_cbars(
+            backtrack_cbar_id, -1
+        )  # backtrack_cbar_id之前的最后一个cbar
+        prev_cbar = prev_cbars[0] if prev_cbars else None
+        logger.debug("swing中需删除cbar.backtrack_id后，重新开始的位置", prev_cbar=prev_cbar)
+        if prev_cbar is None:
+            return
+        if del_from_swing.cbar_start_id == backtrack_cbar_id:
+            # 如果backtrack_cbar_id正好是波段的起点，则更新前一波段的终点为prev_cbar，并把状态改为Extending
+            prev_swing = self.swing_manager.prev_swing(del_from_swing.id)
+            if prev_swing:
+                prev_swing.cbar_end_id = prev_cbar.id
+                prev_swing.sbar_end_id = prev_cbar.sbar_end_id
+                prev_swing.high_price = max(prev_swing.high_price, prev_cbar.high_price)
+                prev_swing.low_price = min(prev_swing.low_price, prev_cbar.low_price)
+                prev_swing.state = SwingState.Extending
 
-            del_swing.cbar_end_id = end_bar.id
-            del_swing.sbar_end_id = end_bar.sbar_end_id
-            del_swing.high_price = max(del_swing.high_price, end_bar.high_price)
-            del_swing.low_price = min(del_swing.low_price, end_bar.low_price)
-            del_swing.is_completed = False
-            self._append_swing(del_swing)
+                self._update_swing(prev_swing)
+        else:
+            # 否则，说明backtrack_cbar_id在波段区间内，把波段的终点改为prev_cbar，并把状态改为Extending
+            self._append_swing(
+                direction=del_from_swing.direction,
+                state=SwingState.Extending,
+                cbar_start_id=del_from_swing.cbar_start_id,
+                cbar_end_id=prev_cbar.id,
+                sbar_start_id=del_from_swing.sbar_start_id,
+                sbar_end_id=prev_cbar.sbar_end_id,
+                high_price=max(del_from_swing.high_price, prev_cbar.high_price),
+                low_price=min(del_from_swing.low_price, prev_cbar.low_price),
+            )
 
-        self.swing_manager.backtrack_id = del_swing.id
-
-    def _backtrack_replay(self, backtrack_id: int):
+    def _backtrack_replay(self, backtrack_cbar_id: int):
         """
         查找要从哪个cbar开始回放处理，取值min(backtrack_id, swing.end_id)
         """
         # 2. 获取需要处理的cbar[backtrack_id, last_id]，进行回放
-        cbar_list = self.swing_manager.cbar_manager.get_nearest_cbars(backtrack_id)
+        cbar_list = self.swing_manager.cbar_manager.get_nearest_cbars(backtrack_cbar_id)
         if cbar_list is None:
             return
         for cbar in cbar_list:

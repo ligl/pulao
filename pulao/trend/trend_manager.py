@@ -1,6 +1,6 @@
 from __future__ import annotations
 import copy
-from typing import Any, List, Optional
+from typing import Any, List
 
 import polars as pl
 from datetime import datetime as Datetime
@@ -194,27 +194,27 @@ class TrendManager(Observable):
         self.id_gen = IDGenerator(worker_id=3)
         self.active_trend_sfs = _TrendSFSeq(self)  # 趋势和趋势的特征序列
         self.pullback_trend_sfs = _TrendSFSeq(self)  # 反向趋势和特征序列
-        self.backtrack_id = None
+        self.backtrack_trend_id = None
         self.symbol = self.swing_manager.symbol
         self.timeframe = self.swing_manager.timeframe
 
     def _on_swing_changed(self, timeframe: Timeframe, event: EventType, payload: Any):
         # 1. 趋势检测识别
-        swing_backtrack_id = payload.get("backtrack_id", None)
-        if swing_backtrack_id is None:
+        backtrack_swing_id = payload.get("backtrack_id", None)
+        if backtrack_swing_id is None:
             self._build_trend()
         else:
-            self._clean_backtrack(swing_backtrack_id)
-            self._backtrack_replay(swing_backtrack_id)
+            self._clean_backtrack(backtrack_swing_id)
+            self._backtrack_replay(backtrack_swing_id)
         # 2. 保存结果
         self.write_parquet()
-        self.notify(timeframe, EventType.TREND_CHANGED, backtrack_id=self.backtrack_id)
+        self.notify(timeframe, EventType.TREND_CHANGED, backtrack_id=self.backtrack_trend_id)
 
-    def _clean_backtrack(self, swing_backtrack_id: int):
+    def _clean_backtrack(self, backtrack_swing_id: int):
         # 1. 清理df_trend
         df = self.df_trend.filter(
-            (pl.col("swing_start_id") <= swing_backtrack_id)
-            & (swing_backtrack_id <= pl.col("swing_end_id"))
+            (pl.col("swing_start_id") <= backtrack_swing_id)
+            & (backtrack_swing_id <= pl.col("swing_end_id"))
         )
         if df.is_empty():
             return
@@ -227,11 +227,11 @@ class TrendManager(Observable):
         )  # 删除从第一个traceback_id出现时的数据
 
         # 取出删除之前最后处理的swing,填补tend信息
-        end_swing = self.swing_manager.get_nearest_swing(swing_backtrack_id, -1)
+        end_swing = self.swing_manager.get_nearest_swing(backtrack_swing_id, -1)
 
         if end_swing:  # 如果end_swing为None，说明df_swing在traceback_id之前已没有数据，重新构建趋势
             # 不为None，修改del_trend并重新添加到df_trend
-            if del_trend.swing_start_id == swing_backtrack_id:  # 在趋势起点
+            if del_trend.swing_start_id == backtrack_swing_id:  # 在趋势起点
                 del_trend.swing_start_id = end_swing.id
                 del_trend.sbar_start_id = end_swing.sbar_start_id
 
@@ -252,14 +252,14 @@ class TrendManager(Observable):
             self.pullback_trend_sfs.clear()
 
         # 3. 记录df_trend的变化点
-        self.backtrack_id = del_trend.id
+        self.backtrack_trend_id = del_trend.id
 
-    def _backtrack_replay(self, backtrack_id: int = None):
+    def _backtrack_replay(self, backtrack_swing_id: int = None):
         """
         查找要从哪个swing开始回放处理，取值min(backtrack_id, trend.end_id)
         """
         # 2. 获取需要处理的swing[backtrack_id, last_id]，进行回放
-        swing_list = self.swing_manager.get_nearest_swing(backtrack_id)
+        swing_list = self.swing_manager.get_nearest_swing(backtrack_swing_id)
         for swing in swing_list or []:
             self._build_trend(swing)
 

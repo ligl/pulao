@@ -34,7 +34,7 @@ class CBarManager(Observable):
         self.sbar_manager: SBarManager = sbar_manager
         self.sbar_manager.subscribe(self._on_new_sbar, EventType.SBAR_CREATED)
         self.id_gen = IDGenerator(worker_id=1)
-        self.backtrack_id = None # 合并之后，从哪个k线开始重新计算，大于等于此id的都要被重新计算
+        self.backtrack_cbar_id = None # 合并之后，从哪个k线开始重新计算，大于等于此id的都要被重新计算
         self.symbol = self.sbar_manager.symbol
         self.timeframe = self.sbar_manager.timeframe
 
@@ -46,7 +46,7 @@ class CBarManager(Observable):
         # 3. save to parquet
         self.write_parquet()
         # 4. 通知订阅者，数据变动
-        self.notify(timeframe,EventType.CBAR_CHANGED, backtrack_id=self.backtrack_id)
+        self.notify(timeframe,EventType.CBAR_CHANGED, backtrack_id=self.backtrack_cbar_id)
 
     def write_parquet(self):
         # TODO 实时行情不能这么做，需要考虑性能影响
@@ -67,7 +67,7 @@ class CBarManager(Observable):
         K线包含关系处理（缠论预处理第一步）
         将原始K线合并为无包含关系的处理后K线序列
         """
-        self.backtrack_id = None
+        self.backtrack_cbar_id = None
         # 当前待处理的原始K线
         curr_high = sbar.high_price
         curr_low = sbar.low_price
@@ -138,7 +138,7 @@ class CBarManager(Observable):
                 merged_low = min(last_low, curr_low)
 
             # 移除最后一条（因为要被合并替换）
-            self.backtrack_id = min(last_cbar.id,self.backtrack_id) if self.backtrack_id else last_cbar.id
+            self.backtrack_cbar_id = min(last_cbar.id,self.backtrack_cbar_id) if self.backtrack_cbar_id else last_cbar.id
             self.df_cbar = self.df_cbar.slice(0, self.df_cbar.height - 1)
 
             # 关键：可能还需要向前继续合并！
@@ -171,7 +171,7 @@ class CBarManager(Observable):
                         merged_high = min(merged_high, prev.high_price)
                         merged_low = min(merged_low, prev.low_price)
                     # 删除倒数第二根（现在成了最后）
-                    self.backtrack_id = min(new_last.id,self.backtrack_id) if self.backtrack_id else new_last.id
+                    self.backtrack_cbar_id = min(new_last.id,self.backtrack_cbar_id) if self.backtrack_cbar_id else new_last.id
                     self.df_cbar = self.df_cbar.slice(0, self.df_cbar.height - 1)
                 else:
                     break
