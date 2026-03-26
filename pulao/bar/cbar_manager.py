@@ -326,6 +326,11 @@ class CBarManager(Observable):
         return [CBar(**row) for row in df.rows(named=True)]
 
     def get_fractal(self, id: int | None = None) -> Fractal | None:
+        """
+        获取指定id的分形，如果id为None，则获取最新的分形
+        :param id: cbar id 为 顶底分型的中间K线id
+        :return: Fractal or None
+        """
         if id is None:
             # 取最新的分形
             id = self.df_cbar.tail(Const.LOOKBACK_LIMIT).filter(pl.col("fractal_type") != FractalType.NONE).tail(1).select(pl.col("id")).item()

@@ -1,0 +1,4 @@
+# tests project
+> pytest
+
+

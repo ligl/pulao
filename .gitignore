@@ -63,3 +63,7 @@ target/
 docs/rust-migration.md
 scripts/compare_python_rust_replay.py
 docs/rust-migration.md
+
+# pytest
+.pytest_cache/
+.coverage

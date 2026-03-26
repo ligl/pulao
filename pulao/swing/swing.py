@@ -12,13 +12,13 @@ from pulao.sd import SupplyDemand
 class SwingState(Enum):
     """
     波段状态枚举
-    Extending = 1  # 当前方向正在延展
-    Tentative = 2  # 已出现反向候选，等待后继 swing 证明其有效
-    Confirmed = 3  # 已被后继反向 swing 确认终结
+    Extending = 1  # 延续状态，当前方向正在延展
+    Tentative = 2  # 候选状态，已出现反向候选，等待后继 swing 证明其有效
+    Confirmed = 3  # 确认状态，已被后继反向 swing 确认终结
     """
-    Extending = 1  # 当前方向正在延展
-    Tentative = 2  # 已出现反向候选，等待后继 swing 证明其有效
-    Confirmed = 3  # 已被后继反向 swing 确认终结
+    Extending = 1  # 延续状态，当前方向正在延展
+    Tentative = 2  # 候选状态，已出现反向候选，等待后继 swing 证明其有效
+    Confirmed = 3  # 确认状态，已被后继反向 swing 确认终结
 
 @dataclass(slots=True)
 class Swing:
