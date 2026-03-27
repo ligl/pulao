@@ -79,7 +79,7 @@ class SBarManager(Observable):
         self.notify(self.timeframe, EventType.SBAR_CREATED, sbar=sbar)
         return sbar.id
 
-    def get_index(self, id: int) -> int | None:
+    def get_idx(self, id: int) -> int | None:
         idx = self.df_sbar.select(pl.col("id").search_sorted(id)).item()
         if idx < 0 or idx >= self.df_sbar.height or self.df_sbar["id"][idx] != id:
             return None
@@ -87,7 +87,7 @@ class SBarManager(Observable):
             return idx
 
     def get_at_id(self, id: int) -> SBar | None:
-        return self.get_at_index(self.get_index(id))
+        return self.get_at_index(self.get_idx(id))
 
     def get_at_index(self, index: int | None) -> SBar | None:
         if index is None:
@@ -114,8 +114,8 @@ class SBarManager(Observable):
         """
         if arg not in ["max", "min"]:
             return None
-        start_index = self.get_index(start_id)
-        end_index = self.get_index(end_id)
+        start_index = self.get_idx(start_id)
+        end_index = self.get_idx(end_id)
         if start_index is None or end_index is None:
             return None
         if start_index > end_index:  # 交换
@@ -153,7 +153,7 @@ class SBarManager(Observable):
         :param ret_df: 是否返回原生pl.DataFrame
         :return:
         """
-        idx = self.get_index(pivot_id)
+        idx = self.get_idx(pivot_id)
         if idx is None:
             return None
 
@@ -174,7 +174,7 @@ class SBarManager(Observable):
         return [SBar(**row) for row in df.rows(named=True)]
 
     def update_by_id(self, id: int, field: str, value):
-        index = self.get_index(id)
+        index = self.get_idx(id)
         if index is None:
             return
 
@@ -207,8 +207,8 @@ class SBarManager(Observable):
         return self.df_sbar
 
     def stat(self, start_id:int, end_id:int) -> dict|None:
-        start_idx = self.get_index(start_id)
-        end_idx = self.get_index(end_id)
+        start_idx = self.get_idx(start_id)
+        end_idx = self.get_idx(end_id)
         if start_idx is None or end_idx is None:
             return None
         if start_idx > end_idx:
@@ -222,3 +222,19 @@ class SBarManager(Observable):
         end_oi = df.select(pl.col("open_interest").last()).item()
         volume = df.select(pl.col("volume").sum()).item()
         return dict(span=df.height, volume=volume, start_oi=start_oi, end_oi=end_oi)
+
+    def total_count_between(self, start_id: int, end_id: int) -> int | None:
+        """
+        获取在[start_id, end_id]区间内的sbar数量
+        :param start_id: 起始sbar id
+        :param end_id: 结束sbar id
+        :return: 区间内的sbar数量，如果id无效返回None
+        """
+        start_idx = self.get_idx(start_id)
+        end_idx = self.get_idx(end_id)
+        if start_idx is None or end_idx is None:
+            return None
+        if start_idx > end_idx:
+            start_idx, end_idx = end_idx, start_idx
+
+        return end_idx - start_idx + 1

@@ -486,48 +486,46 @@ class _SwingBuilder:
         prev_swing = self.swing_manager.prev_swing(last_swing.id)  # 获取最后一个波段的前一个波段，无论是否完成
 
         fractal_type = curr_fractal.fractal_type()
-        match fractal_type:
-            case FractalType.NONE:
-                # 不是分型，形成不了波段点，但有可能打破之前的波段，使之前的波段重新延续，所以需要判断是否打破之前的波段
-                is_break = self._check_reverse_break_swing(last_bar, last_swing)
-                if is_break:
-                    # 打破当前的波段，使之前的波段重新延续
-                    logger.debug(
-                        "打破当前的波段，使之前的波段重新延续",
-                        last_bar=last_bar,
-                        last_swing=last_swing,
-                        prev_swing=prev_swing,
-                    )
-                    # 打破之前的波段，使之前的波段重新延续
-                    # 1. 删除last_swing
-                    # 2. 更新prev_swing的end_id和价格、状态及其相关信息，使其重新延续到最新
-                    # 3. 更新backtrack_id，使得从prev_swing开始的后续波段都要被重新计算
-                    self._del_swing()
-                    if prev_swing is not None:
-                        prev_swing.state = SwingState.Extending
-                        prev_swing.cbar_end_id = last_bar.id
-                        prev_swing.sbar_end_id = last_bar.sbar_end_id
-                        prev_swing.high_price = max(prev_swing.high_price, last_bar.high_price)
-                        prev_swing.low_price = min(prev_swing.low_price, last_bar.low_price)
+        # 不是分型，形成不了波段点，但有可能打破之前的波段，使之前的波段重新延续，所以需要判断是否打破之前的波段
+        is_break = self._check_reverse_break_swing(last_bar, last_swing)
+        if is_break:
+            # 打破当前的波段，使之前的波段重新延续
+            logger.debug(
+                "打破当前的波段，使之前的波段重新延续",
+                last_bar=last_bar,
+                last_swing=last_swing,
+                prev_swing=prev_swing,
+            )
+            # 打破之前的波段，使之前的波段重新延续
+            # 1. 删除last_swing
+            # 2. 更新prev_swing的end_id和价格、状态及其相关信息，使其重新延续到最新
+            # 3. 更新backtrack_id，使得从prev_swing开始的后续波段都要被重新计算
+            self._del_swing()
+            if prev_swing is not None:
+                prev_swing.state = SwingState.Extending
+                prev_swing.cbar_end_id = last_bar.id
+                prev_swing.sbar_end_id = last_bar.sbar_end_id
+                prev_swing.high_price = max(prev_swing.high_price, last_bar.high_price)
+                prev_swing.low_price = min(prev_swing.low_price, last_bar.low_price)
 
-                        self._update_swing(prev_swing)
-                else:
-                    # 没有打破之前的波段，继续延续当前波段
-                    logger.debug(
-                        "没有打破之前的波段，继续延续当前波段",
-                        last_bar=last_bar,
-                        last_swing=last_swing,
-                        prev_swing=prev_swing,
-                    )
-                    # 更新last_swing的end_id和价格，使其延续到最新，等待后续分形来确认波段是否终结
-                    last_swing.cbar_end_id = last_bar.id
-                    last_swing.sbar_end_id = last_bar.sbar_end_id
-                    last_swing.high_price = max(last_swing.high_price, last_bar.high_price)
-                    last_swing.low_price = min(last_swing.low_price, last_bar.low_price)
+                self._update_swing(prev_swing)
+        else:
+            # 没有打破之前的波段，继续延续当前波段
+            logger.debug(
+                "没有打破之前的波段，继续延续当前波段",
+                last_bar=last_bar,
+                last_swing=last_swing,
+                prev_swing=prev_swing,
+            )
+            # 更新last_swing的end_id和价格，使其延续到最新，等待后续分形来确认波段是否终结
+            last_swing.cbar_end_id = last_bar.id
+            last_swing.sbar_end_id = last_bar.sbar_end_id
+            last_swing.high_price = max(last_swing.high_price, last_bar.high_price)
+            last_swing.low_price = min(last_swing.low_price, last_bar.low_price)
 
-                    self._update_swing(last_swing)
+            self._update_swing(last_swing)
 
-            case FractalType.BOTTOM | FractalType.TOP:
+            if fractal_type in (FractalType.BOTTOM, FractalType.TOP):
                 # 上升波段/下降波段 + 底分型，判断分型和当前波段结合是否可以构成有效的波段：
                 # 1. 如果能构成有效的波段，说明当前波段终结，构建新波段：
                 # 1.1 当前波段进入Tentative状态，等待后续波段确认;
@@ -535,9 +533,11 @@ class _SwingBuilder:
                 # 2. 如果不能构成有效的波段，说明：
                 # 2.1. 当前波段可能延续，等待后续分形确认;
                 # 2.2 当前波段的起点可能需要调整（新的底分型比波段起点底分型还低），更当前波段last_swing的起点，并更新前一波段prev_swing的终点
+                start_fractal, _ = self.swing_manager.get_swing_fractal(last_swing)
+                end_fractal = curr_fractal
                 is_valid_swing = self.detect_swing(
-                    start_fractal=self.swing_manager.get_swing_fractal(last_swing)[0],  # 波段起点分型
-                    end_fractal=curr_fractal,
+                    start_fractal=start_fractal,  # 波段起点分型
+                    end_fractal=end_fractal,
                     direction=last_swing.direction,
                     curr_swing=last_swing,
                     prev_swing=prev_swing,
@@ -549,13 +549,13 @@ class _SwingBuilder:
                         last_bar=last_bar,
                         last_swing=last_swing,
                         prev_swing=prev_swing,
-                        curr_fractal=curr_fractal,
+                        curr_fractal=end_fractal,
                     )
                     last_swing.state = SwingState.Tentative
-                    last_swing.cbar_end_id = curr_fractal.id
-                    last_swing.sbar_end_id = curr_fractal.sbar_end_id
-                    last_swing.high_price = max(last_swing.high_price, curr_fractal.high_price)
-                    last_swing.low_price = min(last_swing.low_price, curr_fractal.low_price)
+                    last_swing.cbar_end_id = end_fractal.id
+                    last_swing.sbar_end_id = end_fractal.sbar_end_id
+                    last_swing.high_price = max(last_swing.high_price, end_fractal.high_price)
+                    last_swing.low_price = min(last_swing.low_price, end_fractal.low_price)
 
                     self._update_swing(last_swing)
 
@@ -566,30 +566,16 @@ class _SwingBuilder:
                     # 构建新波段
                     new_swing = {
                         "direction": last_swing.direction.opposite,
-                        "cbar_start_id": curr_fractal.id,
-                        "cbar_end_id": curr_fractal.cbar_end_id,
-                        "high_price": curr_fractal.high_price,
-                        "low_price": curr_fractal.low_price,
-                        "sbar_start_id": curr_fractal.sbar_start_id,
-                        "sbar_end_id": curr_fractal.sbar_end_id,
                         "state": SwingState.Extending,
+                        "cbar_start_id": end_fractal.id,
+                        "cbar_end_id": end_fractal.cbar_end_id,
+                        "high_price": end_fractal.high_price,
+                        "low_price": end_fractal.low_price,
+                        "sbar_start_id": end_fractal.sbar_start_id,
+                        "sbar_end_id": end_fractal.sbar_end_id,
                     }
                     logger.debug("构建新波段", new_swing=new_swing)
                     self._append_swing(**new_swing)
-                else:
-                    logger.debug(
-                        "没有构成一个有效的波段，说明当前波段可能延续，等待后续分形确认",
-                        last_bar=last_bar,
-                        last_swing=last_swing,
-                        prev_swing=prev_swing,
-                        curr_fractal=curr_fractal,
-                    )
-                    last_swing.cbar_end_id = curr_fractal.cbar_end_id
-                    last_swing.sbar_end_id = curr_fractal.sbar_end_id
-                    last_swing.high_price = max(last_swing.high_price, curr_fractal.high_price)
-                    last_swing.low_price = min(last_swing.low_price, curr_fractal.low_price)
-
-                    self._update_swing(last_swing)
 
     def _build_first_swing(self, fractal: Fractal):
         """
@@ -881,17 +867,19 @@ class _SwingBuilder:
             logger.debug("determine_swing prev_swing为None，波动率比较取消")
             return False
         if start_fractal.overlap(end_fractal, is_strict=False):
-            logger.debug("determine_swing 开启分型非严格比较，两个分型中间k线有重叠，不可以形成波段")
+            #logger.debug("determine_swing 开启分型非严格比较，两个分型中间k线有重叠，不可以形成波段")
             return False
         distance = max(start_fractal.high_price, end_fractal.high_price) - min(
             start_fractal.low_price, end_fractal.low_price
         )
-        if distance / prev_swing.distance < 0.6:
+        ratio = distance / prev_swing.distance if prev_swing.distance != 0 else float("inf")
+        if ratio < 0.6:
             return False
-        start_id_sbar = start_fractal.middle.id
-        end_id_sbar = end_fractal.middle.id
-        count_between = abs(end_id_sbar - start_id_sbar) - 1
-        if count_between >= 5:
+        start_sbar_id = start_fractal.middle.sbar_start_id
+        end_sbar_id = end_fractal.middle.sbar_start_id
+        sbar_count = self.swing_manager.cbar_manager.sbar_manager.total_count_between(start_sbar_id, end_sbar_id)
+        if sbar_count and sbar_count >= 5:
+            logger.debug("determine_swing 分型之间有重叠，但满足波动率条件(last_swing.distance/prev_swing.distance)和sbar数量条件，仍然可以形成波段", ratio=ratio, sbar_count=sbar_count, start_fractal=start_fractal, end_fractal=end_fractal)
             return True
 
         return False
